@@ -1,0 +1,7 @@
+{
+  "name": "Chingham's DocuVerify QA - Offline Document & Report Quality Assurance",
+  "description": "Comprehensive offline-first quality assurance assistant for report verification, grammar, data continuity, and uniformity correction with auto-apply.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
