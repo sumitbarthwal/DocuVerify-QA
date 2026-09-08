@@ -13,6 +13,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { MetricCrossCheckerModal } from './components/MetricCrossCheckerModal';
 import { RecentFilesModal } from './components/RecentFilesModal';
 import { HeaderFooterModal } from './components/HeaderFooterModal';
+import { ExportPreviewModal } from './components/ExportPreviewModal';
 import { 
   QAIssue, 
   ReportStats, 
@@ -88,6 +89,7 @@ export default function App() {
   const [metricModalOpen, setMetricModalOpen] = useState<boolean>(false);
   const [recentModalOpen, setRecentModalOpen] = useState<boolean>(false);
   const [headerFooterModalOpen, setHeaderFooterModalOpen] = useState<boolean>(false);
+  const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
   const [headerText, setHeaderText] = useState<string>('');
   const [footerText, setFooterText] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export default function App() {
   const [isAiScanning, setIsAiScanning] = useState<boolean>(false);
   const [aiStatus, setAiStatus] = useState<AIServiceStatus | null>(null);
   const [aiIssues, setAiIssues] = useState<QAIssue[]>([]);
+  const [loadingPercent, setLoadingPercent] = useState<number | null>(null);
 
   // Check AI backend capabilities on mount
   useEffect(() => {
@@ -123,10 +126,22 @@ export default function App() {
     });
   }, []);
 
-  // Run QA Engine whenever content or configuration changes
+  // Debounce QA engine execution on heavy documents to guarantee silky-smooth typing with zero frame drops
+  const [debouncedContent, setDebouncedContent] = useState(content);
+
+  useEffect(() => {
+    // Immediate for small documents (< 20,000 characters), slight debounce (180ms) for massive multi-page documents
+    const delay = content.length > 20000 ? 180 : 20;
+    const timer = setTimeout(() => {
+      setDebouncedContent(content);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [content]);
+
+  // Run QA Engine whenever debounced content or configuration changes
   const qaResult = useMemo(() => {
-    return runFullDocumentQA(content, ruleConfig);
-  }, [content, ruleConfig]);
+    return runFullDocumentQA(debouncedContent, ruleConfig);
+  }, [debouncedContent, ruleConfig]);
 
   // Combine offline deterministic issues with online AI findings
   const combinedIssues = useMemo(() => {
@@ -134,10 +149,10 @@ export default function App() {
     const flaggedTexts = new Set(qaResult.issues.map((i) => i.originalText.trim().toLowerCase()));
     const nonDuplicatedAi = aiIssues.filter((ai) => {
       if (!ai.originalText) return false;
-      return !flaggedTexts.has(ai.originalText.trim().toLowerCase()) && content.includes(ai.originalText);
+      return !flaggedTexts.has(ai.originalText.trim().toLowerCase()) && debouncedContent.includes(ai.originalText);
     });
     return [...qaResult.issues, ...nonDuplicatedAi];
-  }, [qaResult.issues, aiIssues, content]);
+  }, [qaResult.issues, aiIssues, debouncedContent]);
 
   const issues = combinedIssues;
   const stats = qaResult.stats;
@@ -389,18 +404,34 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Safety guardrail: Browsers have hard JavaScript heap memory limits.
+    // Heavy documents (>50MB) containing high-res uncompressed media can cause tab memory allocation failures.
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_FILE_SIZE) {
+      showToast(`File size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds 50 MB safety threshold. Please compress or select a text/word document.`);
+      e.target.value = '';
+      return;
+    }
+
     setIsFileLoading(true);
-    setLoadingMessage(`Reading and analyzing ${file.name}...`);
+    setLoadingPercent(5);
+    setLoadingMessage(`Reading ${file.name} (${(file.size / 1024).toFixed(0)} KB)...`);
 
     try {
       // Yield to main thread so the loading overlay renders immediately
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      const result = await parseImportedDocument(file);
+      const result = await parseImportedDocument(file, (msg, pct) => {
+        setLoadingMessage(msg);
+        if (pct !== undefined) setLoadingPercent(pct);
+      });
+
       setLoadingMessage(`Formatting and paginating document structure...`);
+      setLoadingPercent(95);
       await new Promise(resolve => setTimeout(resolve, 30));
 
       updateContentWithHistory(result.content);
+      setDebouncedContent(result.content);
       setFilename(result.filename);
       setSelectedIssueId(null);
       setSessionResolvedCount(0);
@@ -448,6 +479,7 @@ export default function App() {
       showToast('Error reading document file. Please ensure format is valid.');
     } finally {
       setIsFileLoading(false);
+      setLoadingPercent(null);
       e.target.value = '';
     }
   };
@@ -654,6 +686,7 @@ export default function App() {
         onTriggerAiScan={handleTriggerAiScan}
         isAiScanning={isAiScanning}
         aiAvailable={aiStatus?.available ?? true}
+        onOpenExportPreview={() => setExportModalOpen(true)}
       />
 
       {/* Main Workspace */}
@@ -678,6 +711,7 @@ export default function App() {
             onApplyFix={handleApplyIssue}
             onApplyManualFix={handleApplyManualFix}
             onIgnoreIssue={handleIgnoreIssue}
+            onOpenExportPreview={() => setExportModalOpen(true)}
           />
         </div>
 
@@ -792,6 +826,19 @@ export default function App() {
         }}
       />
 
+      <ExportPreviewModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        content={content}
+        filename={filename}
+        stats={stats}
+        issues={activeFilteredIssues}
+        headerText={headerText}
+        footerText={footerText}
+        docxBuffer={docxBuffer}
+        onShowToast={showToast}
+      />
+
       {/* Document Loading & Processing Overlay */}
       {isFileLoading && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 animate-fadeIn">
@@ -802,12 +849,24 @@ export default function App() {
             <h3 className="font-bold text-slate-800 text-base mb-1">
               Processing Document
             </h3>
-            <p className="text-xs text-slate-500 mb-3">
+            <p className="text-xs text-slate-500 mb-3 min-h-[32px] flex items-center justify-center">
               {loadingMessage}
             </p>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-blue-600 h-full w-2/3 animate-pulse rounded-full" />
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden mb-1.5">
+              {loadingPercent !== null ? (
+                <div 
+                  className="bg-blue-600 h-full transition-all duration-200 rounded-full"
+                  style={{ width: `${Math.min(100, Math.max(8, loadingPercent))}%` }}
+                />
+              ) : (
+                <div className="bg-blue-600 h-full w-2/3 animate-pulse rounded-full" />
+              )}
             </div>
+            {loadingPercent !== null && (
+              <span className="text-[11px] font-mono font-semibold text-slate-400">
+                {loadingPercent}% Complete
+              </span>
+            )}
           </div>
         </div>
       )}

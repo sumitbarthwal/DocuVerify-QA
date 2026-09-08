@@ -22,7 +22,11 @@ import {
   X,
   Sliders,
   Maximize2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Scissors,
+  Columns2,
+  SplitSquareHorizontal,
+  Plus
 } from 'lucide-react';
 import { QAIssue, ReportStats } from '../types';
 import { autoFormatDocumentText } from '../services/uniformityRules';
@@ -46,6 +50,7 @@ interface DocumentEditorProps {
   onApplyFix?: (issue: QAIssue) => void;
   onApplyManualFix?: (issue: QAIssue, replacement: string) => void;
   onIgnoreIssue?: (issueId: string) => void;
+  onOpenExportPreview?: () => void;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -64,8 +69,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onApplyFix,
   onApplyManualFix,
   onIgnoreIssue,
+  onOpenExportPreview,
 }) => {
-  const [viewMode, setViewMode] = useState<'page' | 'edit' | 'preview'>('page');
+  const [viewMode, setViewMode] = useState<'page' | 'split' | 'edit' | 'preview'>('page');
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
@@ -145,6 +151,12 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     setTimeout(() => setFormatNotice(null), 3500);
   };
 
+  const handleInsertPageBreak = () => {
+    insertFormatting('\n\n---\n<!-- Page Break -->\n\n');
+    setFormatNotice('Manual page break inserted (---)');
+    setTimeout(() => setFormatNotice(null), 2500);
+  };
+
   // Find and replace operations
   useEffect(() => {
     if (!findQuery) {
@@ -171,9 +183,11 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     }
   };
 
-  // Calculate lines for gutter
+  // Calculate lines for gutter and page estimation
   const lineCount = Math.max(1, (content.match(/\n/g) || []).length + 1);
   const lineNumbers = Array.from({ length: lineCount }, (_, i) => i + 1);
+  const explicitBreaksCount = (content.match(/^\s*(?:---|\*\*\*|___)\s*$/gm) || []).length;
+  const estimatedPagesCount = Math.max(1, Math.ceil(lineCount / 48) + explicitBreaksCount);
 
   // Jump to issue in Textarea editor
   const jumpToIssueInEditor = (issue: QAIssue) => {
@@ -283,6 +297,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             <TableIcon className="w-4 h-4" />
           </button>
           
+          {/* Insert Page Break */}
+          <button
+            onClick={handleInsertPageBreak}
+            className="px-2 py-1 text-slate-700 hover:text-blue-900 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded transition flex items-center gap-1.5 text-xs font-semibold"
+            title="Insert a page break marker (---) into the document"
+          >
+            <Scissors className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Page Break</span>
+          </button>
+
           <button
             onClick={handleAutoFormat}
             className="px-2 py-1 text-slate-700 hover:text-indigo-900 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded transition flex items-center gap-1.5 text-xs font-semibold"
@@ -307,52 +331,85 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           </button>
         </div>
 
-        {/* View Switcher: Word Page Layout vs Text Editor vs Audit Overlay */}
-        <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg text-xs font-medium">
-          <button
-            onClick={() => {
-              setViewMode('page');
-              setOverlayActiveIssue(null);
-            }}
-            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition ${
-              viewMode === 'page'
-                ? 'bg-white text-blue-700 font-semibold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Word Page View</span>
-          </button>
+        {/* Multi-View Switcher: Word Page Layout vs Split View vs Audit Overlay vs Text Editor */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg text-xs font-medium">
+            <button
+              onClick={() => {
+                setViewMode('page');
+                setOverlayActiveIssue(null);
+              }}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition ${
+                viewMode === 'page'
+                  ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Word Page Document Layout"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Word View</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setViewMode('preview');
-              setOverlayActiveIssue(null);
-            }}
-            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition ${
-              viewMode === 'preview'
-                ? 'bg-white text-blue-700 font-semibold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span>Audit Overlay</span>
-          </button>
+            <button
+              onClick={() => {
+                setViewMode('split');
+                setOverlayActiveIssue(null);
+              }}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition ${
+                viewMode === 'split'
+                  ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Split View: Text editor on left, live updating Word Page View on right"
+            >
+              <Columns2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Split View</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setViewMode('edit');
-              setOverlayActiveIssue(null);
-            }}
-            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition ${
-              viewMode === 'edit'
-                ? 'bg-white text-blue-700 font-semibold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Text Editor</span>
-          </button>
+            <button
+              onClick={() => {
+                setViewMode('preview');
+                setOverlayActiveIssue(null);
+              }}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition ${
+                viewMode === 'preview'
+                  ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Audit Overlay with interactive error highlights"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Audit Overlay</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setViewMode('edit');
+                setOverlayActiveIssue(null);
+              }}
+              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1.5 transition ${
+                viewMode === 'edit'
+                  ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Full Text and Markdown Editor"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Editor</span>
+            </button>
+          </div>
+
+          {/* Export & Print Preview Button */}
+          {onOpenExportPreview && (
+            <button
+              onClick={onOpenExportPreview}
+              className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition flex items-center gap-1.5 shadow-2xs"
+              title="Open interactive multi-format export and print preview"
+            >
+              <Eye className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden sm:inline">Export Preview</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -472,6 +529,73 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             onIgnoreIssue={onIgnoreIssue}
             onJumpToEditor={jumpToIssueInEditor}
           />
+        ) : viewMode === 'split' ? (
+          /* Split View: Left side Text Editor, Right side Live Document Page View */
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-slate-200">
+            {/* Left Column: Interactive Text Editor */}
+            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col bg-white overflow-hidden">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Markdown / Raw Source</span>
+                </span>
+                <span className="text-[11px] text-slate-400 font-normal">Auto-syncs right</span>
+              </div>
+              <div className="flex-1 relative flex overflow-hidden">
+                <div
+                  ref={lineNumbersRef}
+                  className="w-11 bg-slate-50 border-r border-slate-200/80 py-3 select-none overflow-hidden text-right pr-2 font-mono text-xs text-slate-400"
+                >
+                  {lineNumbers.slice(0, 300).map((num) => (
+                    <div key={num} className="leading-6">
+                      {num}
+                    </div>
+                  ))}
+                </div>
+                <textarea
+                  value={content}
+                  onChange={(e) => onChange(e.target.value)}
+                  placeholder="Write or edit document here..."
+                  className="w-full h-full p-3 outline-hidden resize-none font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 text-[14px] leading-6 bg-white overflow-y-auto selection:bg-blue-100"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+
+            {/* Right Column: Live Word Page View */}
+            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col overflow-hidden bg-slate-100">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Live Word Document Preview</span>
+                </span>
+                <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Rendering
+                </span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <DocumentPageView
+                  content={content}
+                  onChange={onChange}
+                  issues={issues}
+                  stats={stats}
+                  selectedIssueId={selectedIssueId}
+                  onSelectIssue={onSelectIssue}
+                  headerText={headerText}
+                  footerText={footerText}
+                  docxBuffer={docxBuffer}
+                  onDocxBufferChange={onDocxBufferChange}
+                  images={images}
+                  onOpenHeaderFooterModal={onOpenHeaderFooterModal}
+                  onApplyFix={onApplyFix}
+                  onApplyManualFix={onApplyManualFix}
+                  onIgnoreIssue={onIgnoreIssue}
+                  onJumpToEditor={jumpToIssueInEditor}
+                />
+              </div>
+            </div>
+          </div>
         ) : viewMode === 'edit' ? (
           <>
             {/* Line Numbers Gutter */}
@@ -486,8 +610,25 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               ))}
             </div>
 
-            {/* Editable Textarea */}
-            <div className="flex-1 relative h-full">
+            {/* Editable Textarea with Page Break Visualiser Helper Bar */}
+            <div className="flex-1 relative h-full flex flex-col">
+              <div className="px-4 py-1.5 bg-indigo-50/70 border-b border-indigo-100 text-xs text-indigo-900 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Scissors className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>
+                    <strong>Page Break Visualiser:</strong> ~{estimatedPagesCount} estimated page{estimatedPagesCount !== 1 ? 's' : ''} ({explicitBreaksCount} manual page break{explicitBreaksCount !== 1 ? 's' : ''})
+                  </span>
+                </div>
+                <button
+                  onClick={handleInsertPageBreak}
+                  className="px-2 py-0.5 bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-700 font-semibold rounded text-[11px] transition flex items-center gap-1 shadow-2xs"
+                  title="Insert a page break marker (---) into document"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Insert Page Break</span>
+                </button>
+              </div>
+
               <textarea
                 ref={textareaRef}
                 id="document-editor-textarea"
@@ -495,7 +636,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 onChange={(e) => onChange(e.target.value)}
                 onScroll={handleScroll}
                 placeholder="Paste, write, or upload your document report here to begin automated QA verification..."
-                className="w-full h-full p-4 sm:p-6 outline-hidden resize-none font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 text-[15px] leading-6 bg-white overflow-y-auto selection:bg-blue-100"
+                className="w-full flex-1 p-4 sm:p-6 outline-hidden resize-none font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 text-[15px] leading-6 bg-white overflow-y-auto selection:bg-blue-100"
                 spellCheck={false}
               />
             </div>

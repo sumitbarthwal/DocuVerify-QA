@@ -66,6 +66,7 @@ interface NavbarProps {
   onTriggerAiScan?: () => void;
   isAiScanning?: boolean;
   aiAvailable?: boolean;
+  onOpenExportPreview?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -103,6 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTriggerAiScan,
   isAiScanning = false,
   aiAvailable = true,
+  onOpenExportPreview,
 }) => {
   const [exportOpen, setExportOpen] = useState(false);
   const [samplesOpen, setSamplesOpen] = useState(false);
@@ -495,6 +497,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   Export Document Formats
                 </div>
+
+                {/* Interactive Export & Print Preview */}
+                {onOpenExportPreview && (
+                  <div className="px-2 py-1 border-b border-slate-100 mb-1">
+                    <button
+                      id="btn-interactive-export-preview"
+                      onClick={() => {
+                        setExportOpen(false);
+                        onOpenExportPreview();
+                      }}
+                      className="w-full text-left p-2 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-lg flex items-center gap-2 font-semibold transition border border-blue-200"
+                    >
+                      <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold text-blue-900 block">Export &amp; Print Preview</span>
+                        <span className="text-[10px] text-blue-600 block">Preview Word, PDF, Certificate &amp; Tables</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
 
                 {/* 1. Microsoft Word */}
                 <button

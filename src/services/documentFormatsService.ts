@@ -254,7 +254,10 @@ export function parseRtfToText(rtf: string): string {
 }
 
 // Helper: Extract text from PDF document preserving page boundaries and structure
-export async function parsePdfDocument(arrayBuffer: ArrayBuffer): Promise<{ content: string; pageCount: number }> {
+export async function parsePdfDocument(
+  arrayBuffer: ArrayBuffer,
+  onProgress?: (status: string, percent?: number) => void
+): Promise<{ content: string; pageCount: number }> {
   try {
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
@@ -267,6 +270,13 @@ export async function parsePdfDocument(arrayBuffer: ArrayBuffer): Promise<{ cont
 
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
       try {
+        if (onProgress && (pageNum % 2 === 0 || pageNum === 1 || pageNum === numPages)) {
+          const pct = Math.round((pageNum / numPages) * 100);
+          onProgress(`Extracting text from PDF page ${pageNum} of ${numPages}...`, pct);
+          // Cooperative yield to keep browser event loop responsive
+          await new Promise(r => setTimeout(r, 0));
+        }
+
         const page = await pdfDoc.getPage(pageNum);
         const textContent = await page.getTextContent();
         
@@ -361,7 +371,10 @@ export function extractTextFromPdfStream(buffer: ArrayBuffer): string {
 }
 
 // Universal File Importer Supporting All Required Formats
-export async function parseImportedDocument(file: File): Promise<ImportResult> {
+export async function parseImportedDocument(
+  file: File,
+  onProgress?: (status: string, percent?: number) => void
+): Promise<ImportResult> {
   const name = file.name;
   const extension = name.split('.').pop()?.toLowerCase() || '';
 
@@ -373,7 +386,14 @@ export async function parseImportedDocument(file: File): Promise<ImportResult> {
   let rawDocxBuffer: ArrayBuffer | undefined = undefined;
 
   try {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    onProgress?.(`Reading ${file.name} (${sizeMb} MB)...`, 15);
+    await new Promise(r => setTimeout(r, 10));
+
     if (extension === 'docx') {
+      onProgress?.('Extracting document package and media archives...', 30);
+      await new Promise(r => setTimeout(r, 10));
+
       const arrayBuffer = await file.arrayBuffer();
       rawDocxBuffer = arrayBuffer.slice(0);
 
@@ -386,6 +406,9 @@ export async function parseImportedDocument(file: File): Promise<ImportResult> {
       } catch (metaErr) {
         console.warn('Docx header/footer extraction warning:', metaErr);
       }
+
+      onProgress?.('Converting Word structure, tables, and styles...', 55);
+      await new Promise(r => setTimeout(r, 10));
 
       // Configure Mammoth to convert embedded images into lightweight Blob URLs
       // This prevents multi-megabyte base64 strings from locking up regex scanners and React rendering
@@ -438,7 +461,9 @@ export async function parseImportedDocument(file: File): Promise<ImportResult> {
       format = 'DOCX';
     } else if (extension === 'pdf') {
       const arrayBuffer = await file.arrayBuffer();
-      const pdfData = await parsePdfDocument(arrayBuffer);
+      const pdfData = await parsePdfDocument(arrayBuffer, (msg, pct) => {
+        onProgress?.(msg, pct);
+      });
       content = pdfData.content;
       format = 'PDF';
     } else if (extension === 'doc') {
@@ -1063,3 +1088,124 @@ export function exportToMarkdownFile(content: string, filename: string) {
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
   triggerDownload(blob, `${sanitizeFilename(baseName)}_Verified.md`);
 }
+
+// 9. Print Official QA Audit Certificate
+export function printAuditCertificate(
+  stats: ReportStats,
+  issues: QAIssue[],
+  filename: string
+) {
+  const printWindow = window.open('', '_blank', 'width=850,height=900');
+  if (!printWindow) return;
+
+  const remainingActive = issues.filter(i => !i.ignored).length;
+  const criticalCount = issues.filter(i => !i.ignored && i.severity === 'critical').length;
+  const warningCount = issues.filter(i => !i.ignored && i.severity === 'warning').length;
+  const suggestionCount = issues.filter(i => !i.ignored && i.severity === 'suggestion').length;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>QA Audit Verification Certificate - ${escapeXml(filename)}</title>
+  <style>
+    @page { size: letter portrait; margin: 15mm; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      margin: 0;
+      padding: 30px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .cert-frame {
+      background: #ffffff;
+      border: 6px double #0284c7;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 720px;
+      width: 100%;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      box-sizing: border-box;
+    }
+    .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 24px; margin-bottom: 24px; }
+    .badge { display: inline-block; padding: 4px 14px; background: #e0f2fe; color: #0369a1; border-radius: 20px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+    h1 { margin: 12px 0 6px; font-size: 26px; color: #0f172a; }
+    .subtitle { color: #64748b; font-size: 13px; margin: 0; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 24px 0; }
+    .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; }
+    .stat-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+    .stat-val { font-size: 22px; font-weight: 800; margin-top: 4px; color: #0f172a; }
+    .score-high { color: #15803d; }
+    .score-med { color: #b45309; }
+    .score-low { color: #b91c1c; }
+    .details { font-size: 13px; line-height: 1.6; margin: 20px 0; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: #fafafa; }
+    .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 36px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; }
+    .sig-line { width: 180px; border-top: 1px solid #94a3b8; margin-top: 24px; text-align: center; padding-top: 4px; font-size: 11px; color: #475569; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .cert-frame { box-shadow: none; border-color: #0284c7; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cert-frame">
+    <div class="header">
+      <span class="badge">Official QA Verification Seal</span>
+      <h1>Quality Assurance Certificate</h1>
+      <p class="subtitle">Chingham's DocuVerify Automated Quality Assurance Inspection Report</p>
+    </div>
+
+    <p style="font-size: 14px; text-align: center; margin: 16px 0 24px;">
+      This document certifies that the record <strong>${escapeXml(filename)}</strong> has undergone comprehensive deterministic rule inspection covering typography, table structure, running headers/footers, and metric continuity.
+    </p>
+
+    <div class="grid">
+      <div class="stat-card">
+        <div class="stat-label">Quality Score</div>
+        <div class="stat-val ${stats.qualityScore >= 85 ? 'score-high' : stats.qualityScore >= 70 ? 'score-med' : 'score-low'}">${stats.qualityScore}/100</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Words</div>
+        <div class="stat-val">${stats.wordCount.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Issues</div>
+        <div class="stat-val">${remainingActive}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Data Continuity</div>
+        <div class="stat-val score-high">${(stats.continuity?.conflictingMetricsFound ?? 0) === 0 ? 'Verified' : 'Flagged'}</div>
+      </div>
+    </div>
+
+    <div class="details">
+      <div><strong>Issue Breakdown:</strong> ${criticalCount} Critical, ${warningCount} Warnings, ${suggestionCount} Suggestions</div>
+      <div style="margin-top: 6px;"><strong>Readability Ease:</strong> ${stats.readability?.readingEase ?? 'Professional'} (Reading time ~${stats.readingTimeMinutes} min)</div>
+      <div style="margin-top: 6px;"><strong>Audit Timestamp:</strong> ${new Date().toLocaleString()}</div>
+    </div>
+
+    <div class="footer">
+      <div>
+        <div><strong>DocuVerify QA Engine v2.5</strong></div>
+        <div style="font-size: 10px; margin-top: 2px;">Automated Document Integrity & Assurance</div>
+      </div>
+      <div>
+        <div class="sig-line">Automated QA Signature</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      window.print();
+    };
+  </script>
+</body>
+</html>`;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+

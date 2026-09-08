@@ -24,14 +24,18 @@ import {
   ChevronRight,
   BookOpen,
   Layers,
-  Maximize
+  Maximize,
+  Scissors,
+  Columns2,
+  Plus,
+  SplitSquareHorizontal
 } from 'lucide-react';
 import { FloatingFixBox } from './FloatingFixBox';
 import { DocumentPhotoViewer } from './DocumentPhotoViewer';
 import { WordDocumentViewer } from './WordDocumentViewer';
 import { createStandardDocxPackage } from '../services/docxEngineService';
 
-export type PageLayoutMode = 'word-native' | 'multi-page' | 'continuous';
+export type PageLayoutMode = 'word-native' | 'multi-page' | 'two-page-spread' | 'continuous';
 
 export interface DocumentPageViewProps {
   content: string;
@@ -60,6 +64,10 @@ export interface DocumentPageItem {
   startLine: number;
   endLine: number;
   title: string;
+  breakType?: 'explicit' | 'overflow' | 'heading' | 'end';
+  lineCount: number;
+  wordCount: number;
+  isOverflow: boolean;
 }
 
 /**
@@ -76,7 +84,11 @@ function splitContentIntoPages(fullContent: string): DocumentPageItem[] {
       endOffset: 0,
       startLine: 1,
       endLine: 1,
-      title: 'Page 1'
+      title: 'Page 1',
+      lineCount: 0,
+      wordCount: 0,
+      isOverflow: false,
+      breakType: 'end'
     }];
   }
 
@@ -118,6 +130,9 @@ function splitContentIntoPages(fullContent: string): DocumentPageItem[] {
     if ((isExplicitBreak || isMajorHeading || isPageOverflow) && currentPageLines.length > 0) {
       const pageContent = currentPageLines.join('\n');
       const pageEndOffset = currentOffset > 0 ? currentOffset - 1 : 0;
+      const bType: 'explicit' | 'overflow' | 'heading' = isExplicitBreak ? 'explicit' : isMajorHeading ? 'heading' : 'overflow';
+      const linesCount = currentPageLines.length;
+      const wordsCount = pageContent.split(/\s+/).filter(Boolean).length;
       
       pages.push({
         pageNumber: pages.length + 1,
@@ -126,7 +141,11 @@ function splitContentIntoPages(fullContent: string): DocumentPageItem[] {
         endOffset: Math.max(currentPageStartOffset, pageEndOffset),
         startLine: currentPageStartLine,
         endLine: currentLineNumber - 1,
-        title: currentTitle || `Page ${pages.length + 1}`
+        title: currentTitle || `Page ${pages.length + 1}`,
+        breakType: bType,
+        lineCount: linesCount,
+        wordCount: wordsCount,
+        isOverflow: linesCount > 48
       });
 
       currentPageLines = [];
@@ -152,6 +171,9 @@ function splitContentIntoPages(fullContent: string): DocumentPageItem[] {
 
   if (currentPageLines.length > 0 || pages.length === 0) {
     const pageContent = currentPageLines.join('\n');
+    const linesCount = currentPageLines.length;
+    const wordsCount = pageContent.split(/\s+/).filter(Boolean).length;
+
     pages.push({
       pageNumber: pages.length + 1,
       content: pageContent,
@@ -159,7 +181,11 @@ function splitContentIntoPages(fullContent: string): DocumentPageItem[] {
       endOffset: fullContent.length,
       startLine: currentPageStartLine,
       endLine: currentLineNumber,
-      title: currentTitle || `Page ${pages.length + 1}`
+      title: currentTitle || `Page ${pages.length + 1}`,
+      breakType: 'end',
+      lineCount: linesCount,
+      wordCount: wordsCount,
+      isOverflow: linesCount > 48
     });
   }
 
@@ -190,6 +216,8 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
   const [wordPageTotal, setWordPageTotal] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [editMode, setEditMode] = useState<boolean>(false);
+  const [showPageBreakVisualiser, setShowPageBreakVisualiser] = useState<boolean>(true);
+  const [spreadIndex, setSpreadIndex] = useState<number>(0);
   const [activePopoverIssue, setActivePopoverIssue] = useState<QAIssue | null>(null);
   const [targetRect, setTargetRect] = useState<{
     top: number;
@@ -220,6 +248,22 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
 
   // Split document into discrete pages
   const pages = useMemo(() => splitContentIntoPages(content), [content]);
+
+  // Compute 2-page book spread pairs
+  const spreadPairs = useMemo(() => {
+    const pairs: Array<[DocumentPageItem, DocumentPageItem | null]> = [];
+    for (let i = 0; i < pages.length; i += 2) {
+      pairs.push([pages[i], pages[i + 1] || null]);
+    }
+    return pairs;
+  }, [pages]);
+
+  // Helper to insert an explicit manual page break at the end of a page
+  const handleInsertExplicitPageBreak = (page: DocumentPageItem) => {
+    const insertOffset = page.endOffset;
+    const newContent = content.slice(0, insertOffset) + '\n\n---\n<!-- Page Break -->\n\n' + content.slice(insertOffset);
+    onChange(newContent);
+  };
 
   // Metadata extraction for running headers and footers (fallback if not provided by file)
   const titleMatch = content.match(/^#\s+([^\n\r]+)/m);
@@ -494,7 +538,7 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
 
         {/* View Mode, Zoom & Page Tools */}
         <div className="flex items-center gap-2">
-          {/* Layout Mode Toggle: Word Native vs Multi-Page Sheets vs Continuous Web Flow */}
+          {/* Multi-View Layout Mode Toggle: Word Native vs Multi-Page Sheets vs Two-Page Spread vs Continuous Web Flow */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-md text-slate-600 border border-slate-200">
             <button
               onClick={() => setLayoutMode('word-native')}
@@ -517,6 +561,16 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
               <span className="hidden sm:inline">Pages</span>
             </button>
             <button
+              onClick={() => setLayoutMode('two-page-spread')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition ${
+                layoutMode === 'two-page-spread' ? 'bg-white text-blue-700 shadow-2xs' : 'hover:text-slate-900'
+              }`}
+              title="Two-Page Side-by-Side Book Spread Layout"
+            >
+              <Columns2 className="w-3 h-3 text-indigo-600" />
+              <span className="hidden sm:inline">Spread</span>
+            </button>
+            <button
               onClick={() => setLayoutMode('continuous')}
               className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition ${
                 layoutMode === 'continuous' ? 'bg-white text-blue-700 shadow-2xs' : 'hover:text-slate-900'
@@ -527,6 +581,20 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
               <span className="hidden sm:inline">Flow</span>
             </button>
           </div>
+
+          {/* Page Break Visualiser Toggle Button */}
+          <button
+            onClick={() => setShowPageBreakVisualiser(prev => !prev)}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition border ${
+              showPageBreakVisualiser
+                ? 'bg-blue-50 border-blue-200 text-blue-800 shadow-2xs'
+                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800'
+            }`}
+            title="Toggle visual page break indicators and print capacity limits"
+          >
+            <Scissors className="w-3 h-3 text-blue-600" />
+            <span className="hidden md:inline">Break Guides</span>
+          </button>
 
           {onOpenHeaderFooterModal && (
             <button
@@ -651,6 +719,128 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                 }}
               />
             </div>
+          ) : layoutMode === 'two-page-spread' ? (
+            /* Two-Page Side-by-Side Spread Layout */
+            <div className="space-y-6">
+              {/* Spread Navigation Bar */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSpreadIndex(prev => Math.max(0, prev - 1))}
+                    disabled={spreadIndex === 0}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 border transition ${
+                      spreadIndex === 0 ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-300'
+                    }`}
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Previous Spread</span>
+                  </button>
+                  <span className="font-mono text-xs font-bold text-slate-700 px-2">
+                    Spread {spreadIndex + 1} of {spreadPairs.length}
+                  </span>
+                  <button
+                    onClick={() => setSpreadIndex(prev => Math.min(spreadPairs.length - 1, prev + 1))}
+                    disabled={spreadIndex >= spreadPairs.length - 1}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 border transition ${
+                      spreadIndex >= spreadPairs.length - 1 ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-300'
+                    }`}
+                  >
+                    <span>Next Spread</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="text-xs text-slate-500 font-medium hidden sm:block">
+                  Viewing Pages {spreadPairs[spreadIndex]?.[0]?.pageNumber} &amp; {spreadPairs[spreadIndex]?.[1]?.pageNumber || 'Blank'} of {pages.length}
+                </div>
+              </div>
+
+              {/* Side-by-side spread pages */}
+              {spreadPairs[spreadIndex] && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8 items-start relative">
+                  {/* Left Page (Verso) */}
+                  {(() => {
+                    const leftPage = spreadPairs[spreadIndex][0];
+                    const leftIssues = issues.filter(iss => iss.startOffset < leftPage.endOffset && iss.endOffset >= leftPage.startOffset);
+                    return (
+                      <div 
+                        key={`spread-left-${leftPage.pageNumber}`}
+                        id={`doc-page-sheet-${leftPage.pageNumber}`}
+                        className="bg-white rounded-xs shadow-xl border border-slate-300 min-h-[900px] p-6 sm:p-10 flex flex-col relative text-slate-800 font-['Calibri',sans-serif]"
+                      >
+                        <div className="border-b border-slate-300 pb-2 mb-6 flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="font-bold text-slate-700 truncate max-w-[70%]">{effectiveHeader}</span>
+                          <span className="font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">Page {leftPage.pageNumber}</span>
+                        </div>
+                        <div className="flex-1 text-sm">
+                          <RenderDocumentPageStructure
+                            content={leftPage.content}
+                            pageBaseOffset={leftPage.startOffset}
+                            issues={leftIssues}
+                            selectedIssueId={selectedIssueId}
+                            onSelectIssue={(issue, rect) => {
+                              onSelectIssue(issue.id);
+                              setActivePopoverIssue(issue);
+                              setTargetRect(rect);
+                            }}
+                            onPhotoClick={(photo) => setActivePhoto(photo)}
+                          />
+                        </div>
+                        <div className="border-t border-slate-300 pt-2.5 mt-8 flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="truncate max-w-[70%]">{effectiveFooter}</span>
+                          <span className="font-mono font-bold text-slate-700">P. {leftPage.pageNumber}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Right Page (Recto) */}
+                  {(() => {
+                    const rightPage = spreadPairs[spreadIndex][1];
+                    if (!rightPage) {
+                      return (
+                        <div className="bg-slate-50/50 rounded-xs border-2 border-dashed border-slate-200 min-h-[900px] p-6 flex flex-col items-center justify-center text-slate-400">
+                          <FileText className="w-10 h-10 stroke-1 text-slate-300 mb-2" />
+                          <p className="text-sm font-medium">End of Document</p>
+                          <p className="text-xs text-slate-400">No facing page</p>
+                        </div>
+                      );
+                    }
+                    const rightIssues = issues.filter(iss => iss.startOffset < rightPage.endOffset && iss.endOffset >= rightPage.startOffset);
+                    return (
+                      <div 
+                        key={`spread-right-${rightPage.pageNumber}`}
+                        id={`doc-page-sheet-${rightPage.pageNumber}`}
+                        className="bg-white rounded-xs shadow-xl border border-slate-300 min-h-[900px] p-6 sm:p-10 flex flex-col relative text-slate-800 font-['Calibri',sans-serif]"
+                      >
+                        <div className="border-b border-slate-300 pb-2 mb-6 flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="font-bold text-slate-700 truncate max-w-[70%]">{effectiveHeader}</span>
+                          <span className="font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">Page {rightPage.pageNumber}</span>
+                        </div>
+                        <div className="flex-1 text-sm">
+                          <RenderDocumentPageStructure
+                            content={rightPage.content}
+                            pageBaseOffset={rightPage.startOffset}
+                            issues={rightIssues}
+                            selectedIssueId={selectedIssueId}
+                            onSelectIssue={(issue, rect) => {
+                              onSelectIssue(issue.id);
+                              setActivePopoverIssue(issue);
+                              setTargetRect(rect);
+                            }}
+                            onPhotoClick={(photo) => setActivePhoto(photo)}
+                          />
+                        </div>
+                        <div className="border-t border-slate-300 pt-2.5 mt-8 flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="truncate max-w-[70%]">{effectiveFooter}</span>
+                          <span className="font-mono font-bold text-slate-700">P. {rightPage.pageNumber}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
           ) : layoutMode === 'continuous' ? (
             /* Continuous Single Flow Layout */
             <div className="bg-white rounded-xs shadow-xl border border-slate-300 min-h-[1050px] p-8 sm:p-14 md:p-16 flex flex-col relative text-slate-800 font-['Calibri',sans-serif]">
@@ -685,83 +875,129 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
           ) : (
             /* Multi-Page Sheets Layout (Physical Paper Pages) */
             <div className="space-y-10">
-              {pages.map((page) => {
+              {pages.map((page, pageIdx) => {
                 // Filter only issues on this specific page for lightning-fast rendering
                 const pageIssues = issues.filter(
                   iss => iss.startOffset < page.endOffset && iss.endOffset >= page.startOffset
                 );
 
                 return (
-                  <div 
-                    key={`doc-page-sheet-${page.pageNumber}`}
-                    id={`doc-page-sheet-${page.pageNumber}`}
-                    className="bg-white rounded-xs shadow-xl border border-slate-300 min-h-[1050px] p-8 sm:p-14 md:p-16 flex flex-col relative text-slate-800 font-['Calibri',sans-serif] transition-shadow hover:shadow-2xl"
-                  >
-                    {/* Running Header at Top of Each Page */}
-                    <div className="border-b border-slate-300 pb-2.5 mb-8 flex items-center justify-between text-[11px] text-slate-500 select-none group">
-                      <div className="flex items-center gap-2 truncate max-w-[75%]">
-                        <span className="font-bold text-slate-700 tracking-tight truncate">{effectiveHeader}</span>
+                  <React.Fragment key={`doc-page-fragment-${page.pageNumber}`}>
+                    <div 
+                      key={`doc-page-sheet-${page.pageNumber}`}
+                      id={`doc-page-sheet-${page.pageNumber}`}
+                      className="bg-white rounded-xs shadow-xl border border-slate-300 min-h-[1050px] p-8 sm:p-14 md:p-16 flex flex-col relative text-slate-800 font-['Calibri',sans-serif] transition-shadow hover:shadow-2xl"
+                    >
+                      {/* Running Header at Top of Each Page */}
+                      <div className="border-b border-slate-300 pb-2.5 mb-8 flex items-center justify-between text-[11px] text-slate-500 select-none group">
+                        <div className="flex items-center gap-2 truncate max-w-[75%]">
+                          <span className="font-bold text-slate-700 tracking-tight truncate">{effectiveHeader}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {onOpenHeaderFooterModal && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenHeaderFooterModal();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 underline transition"
+                              title="Edit running header text"
+                            >
+                              Edit Header
+                            </button>
+                          )}
+                          <div className="flex items-center gap-1.5 text-slate-500 font-semibold text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span>Page {page.pageNumber}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {onOpenHeaderFooterModal && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenHeaderFooterModal();
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 underline transition"
-                            title="Edit running header text"
-                          >
-                            Edit Header
-                          </button>
-                        )}
-                        <div className="flex items-center gap-1.5 text-slate-500 font-semibold text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          <span>Page {page.pageNumber}</span>
+
+                      {/* Document Page Body Area */}
+                      <div className="flex-1">
+                        <RenderDocumentPageStructure
+                          content={page.content}
+                          pageBaseOffset={page.startOffset}
+                          issues={pageIssues}
+                          selectedIssueId={selectedIssueId}
+                          onSelectIssue={(issue, rect) => {
+                            onSelectIssue(issue.id);
+                            setActivePopoverIssue(issue);
+                            setTargetRect(rect);
+                          }}
+                          onPhotoClick={(photo) => setActivePhoto(photo)}
+                        />
+                      </div>
+
+                      {/* Running Footer at Bottom of Each Page */}
+                      <div className="border-t border-slate-300 pt-3 mt-12 flex items-center justify-between text-[11px] text-slate-500 select-none group">
+                        <div className="truncate max-w-[70%]">
+                          <span className="font-medium text-slate-600 truncate">{effectiveFooter}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {onOpenHeaderFooterModal && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenHeaderFooterModal();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 underline transition"
+                              title="Edit running footer text"
+                            >
+                              Edit Footer
+                            </button>
+                          )}
+                          <div className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            Page {page.pageNumber} of {pages.length}
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Document Page Body Area */}
-                    <div className="flex-1">
-                      <RenderDocumentPageStructure
-                        content={page.content}
-                        pageBaseOffset={page.startOffset}
-                        issues={pageIssues}
-                        selectedIssueId={selectedIssueId}
-                        onSelectIssue={(issue, rect) => {
-                          onSelectIssue(issue.id);
-                          setActivePopoverIssue(issue);
-                          setTargetRect(rect);
-                        }}
-                        onPhotoClick={(photo) => setActivePhoto(photo)}
-                      />
-                    </div>
+                    {/* Page Break Visualiser Banner between sheets */}
+                    {showPageBreakVisualiser && pageIdx < pages.length - 1 && (
+                      <div className="my-6 py-2.5 px-4 rounded-xl bg-slate-100/90 border border-slate-300/80 shadow-xs flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center">
+                            <Scissors className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="font-bold text-slate-800">
+                            Page Break ── End of Page {page.pageNumber} / Start of Page {page.pageNumber + 1}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            page.breakType === 'explicit'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : page.breakType === 'heading'
+                              ? 'bg-purple-50 text-purple-800 border-purple-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}>
+                            {page.breakType === 'explicit' ? 'Explicit Break (---)' : page.breakType === 'heading' ? 'Section Heading Break' : 'A4 Capacity Break (~48 lines)'}
+                          </span>
+                        </div>
 
-                    {/* Running Footer at Bottom of Each Page */}
-                    <div className="border-t border-slate-300 pt-3 mt-12 flex items-center justify-between text-[11px] text-slate-500 select-none group">
-                      <div className="truncate max-w-[70%]">
-                        <span className="font-medium text-slate-600 truncate">{effectiveFooter}</span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {onOpenHeaderFooterModal && (
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                          <span>{page.lineCount} lines • {page.wordCount} words</span>
+                          {page.isOverflow ? (
+                            <span className="text-amber-700 font-semibold bg-amber-100 px-2 py-0.5 rounded flex items-center gap-1">
+                              ⚠️ Page Overflow ({page.lineCount}/48 lines)
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded">
+                              ✓ Capacity OK ({page.lineCount}/48 lines)
+                            </span>
+                          )}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenHeaderFooterModal();
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 underline transition"
-                            title="Edit running footer text"
+                            onClick={() => handleInsertExplicitPageBreak(page)}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-semibold flex items-center gap-1 transition text-[10px]"
+                            title="Insert an explicit manual page break (---) at this location"
                           >
-                            Edit Footer
+                            <Plus className="w-3 h-3 text-blue-600" />
+                            <span>Insert Manual Break</span>
                           </button>
-                        )}
-                        <div className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                          Page {page.pageNumber} of {pages.length}
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </div>
