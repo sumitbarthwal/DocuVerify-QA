@@ -8,13 +8,27 @@ const githubPagesPlugin = (): Plugin => ({
   name: 'github-pages-fallback',
   closeBundle() {
     try {
-      const distIndex = path.resolve(__dirname, 'dist/index.html');
-      const dist404 = path.resolve(__dirname, 'dist/404.html');
+      const distDir = path.resolve(__dirname, 'dist');
+      const docsDir = path.resolve(__dirname, 'docs');
+      const distIndex = path.resolve(distDir, 'index.html');
+      const dist404 = path.resolve(distDir, '404.html');
+      const noJekyll = path.resolve(distDir, '.nojekyll');
+
+      // Create .nojekyll
+      fs.writeFileSync(noJekyll, '');
+
+      // Create 404.html from index.html for SPA routing on GitHub Pages
       if (fs.existsSync(distIndex)) {
         fs.copyFileSync(distIndex, dist404);
       }
+
+      // Mirror build output to docs/ for users who prefer GitHub Pages "Deploy from branch -> /docs"
+      if (!fs.existsSync(docsDir)) {
+        fs.mkdirSync(docsDir, { recursive: true });
+      }
+      fs.cpSync(distDir, docsDir, { recursive: true });
     } catch (e) {
-      console.warn('Failed to copy 404.html:', e);
+      console.warn('Failed in githubPagesPlugin:', e);
     }
   },
 });
