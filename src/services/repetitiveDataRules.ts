@@ -80,6 +80,10 @@ export function checkRepetitiveAndUnchangedData(
     if (/^(section|chapter|part|page|appendix|figure|table|note|step|version|item|year|in|on|at|during|from|between|after|before)$/i.test(rawLabel)) {
       continue;
     }
+    // Filter out continuous identifier labels (Policy No, Case ID, PIN code, License No, Claim No, etc.)
+    if (/^(case\s*id|case\s*no|policy|pin|pin\s*code|postal|zip|licen[sc]e|dl|claim|chassis|engine|reg(?:istration)?|rc|vehicle|account|a\/c|serial|invoice|bill|order|phone|mobile|tel|fax|ref(?:erence)?|model)\b/i.test(rawLabel)) {
+      continue;
+    }
     // Filter out labels that are purely numbers or punctuation
     if (!/[a-zA-Z]/.test(rawLabel) || rawLabel.split(/\s+/).length > 6) {
       continue;
@@ -119,7 +123,7 @@ export function checkRepetitiveAndUnchangedData(
     const rawValue = match[2].trim();
     const matchIndex = match.index;
 
-    if (/^(metric|item|description|parameter|name|category|cohort|quarter|year)$/i.test(rawLabel)) {
+    if (/^(metric|item|description|parameter|name|category|cohort|quarter|year|case|policy|pin|license|licence|claim|reg|chassis|account|serial)$/i.test(rawLabel)) {
       continue;
     }
     const numVal = parseNumericValue(rawValue);

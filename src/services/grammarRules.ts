@@ -365,9 +365,16 @@ export function detectGrammarAndPunctuationIssues(text: string): QAIssue[] {
     });
   }
 
-  // 6. Double space within sentences (excluding indentation)
+  // 6. Double space within sentences (excluding indentation and table columns)
   const doubleSpaceRegex = /([^\n\r ])  +([^\n\r ])/g;
   while ((match = doubleSpaceRegex.exec(text)) !== null) {
+    // Skip if within a markdown table row (table alignment legitimately uses space padding)
+    const lineStart = text.lastIndexOf('\n', match.index - 1) + 1;
+    let lineEnd = text.indexOf('\n', match.index);
+    if (lineEnd === -1) lineEnd = text.length;
+    const currentLine = text.slice(lineStart, lineEnd);
+    if (currentLine.includes('|')) continue;
+
     const orig = match[0];
     const fix = `${match[1]} ${match[2]}`;
     issues.push({

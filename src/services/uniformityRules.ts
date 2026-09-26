@@ -1,5 +1,11 @@
 import { QAIssue } from '../types';
 import { getLineNumber } from './grammarRules';
+import {
+  scanContinuousIdentifiersWithCommas,
+  scanCurrencyThousandsSeparators,
+  evaluateNumberContext,
+  formatNumberWithCommas,
+} from './numberIntelligence';
 
 export function checkUniformityAndPlaceholders(text: string): QAIssue[] {
   const issues: QAIssue[] = [];
@@ -37,11 +43,14 @@ export function checkUniformityAndPlaceholders(text: string): QAIssue[] {
   if (dollarSymbolCount > 0 && usdCodeCount > 0) {
     // Flag inconsistent usage
     const primaryIsSymbol = dollarSymbolCount >= usdCodeCount;
+    const isIndian = /\b(?:₹|INR|Rs\.?|lakh|crore)\b/i.test(text);
     const searchRegex = primaryIsSymbol ? /\bUSD\s*(\d+(?:\.\d+)?)\b/g : /\$(\d+(?:\.\d+)?)\b/g;
     let currMatch: RegExpExecArray | null;
     while ((currMatch = searchRegex.exec(text)) !== null) {
       const orig = currMatch[0];
-      const fix = primaryIsSymbol ? `$${currMatch[1]}` : `${currMatch[1]} USD`;
+      const rawNum = currMatch[1];
+      const formattedNum = rawNum.length >= 4 ? formatNumberWithCommas(rawNum, isIndian) : rawNum;
+      const fix = primaryIsSymbol ? `$${formattedNum}` : `${formattedNum} USD`;
       issues.push({
         id: `u-curr-${idCounter++}`,
         category: 'uniformity',
@@ -62,37 +71,18 @@ export function checkUniformityAndPlaceholders(text: string): QAIssue[] {
     }
   }
 
-  // 3. Thousands Separator Uniformity (e.g. 10,000 vs 10000 for 5+ digit numbers)
-  const numbersWithCommas = (text.match(/\b\d{1,3},\d{3}(?:,\d{3})*(?:\.\d+)?\b/g) || []).length;
-  const numbersWithoutCommas = (text.match(/\b\d{5,}(?:\.\d+)?\b/g) || []).length;
+  // 3. Thousands Separator Uniformity & Identifier Protection:
+  // Continuous identifiers (Case ID, Policy No, PIN code, License No, Claim No, etc.)
+  // must remain unbroken without commas. Commas are reserved strictly for currency amounts.
 
-  if (numbersWithCommas >= 2 && numbersWithoutCommas >= 1) {
-    // Majority uses commas
-    const noCommaRegex = /\b(\d{2,3})(\d{3})\b/g;
-    let numMatch: RegExpExecArray | null;
-    while ((numMatch = noCommaRegex.exec(text)) !== null) {
-      const orig = numMatch[0];
-      // Don't format years like 2024 or 1999
-      const val = parseInt(orig, 10);
-      if (val >= 10000) {
-        const fix = `${numMatch[1]},${numMatch[2]}`;
-        issues.push({
-          id: `u-num-${idCounter++}`,
-          category: 'uniformity',
-          severity: 'suggestion',
-          title: 'Thousands Separator Uniformity',
-          description: `Most large figures use comma separators. Format "${orig}" as "${fix}".`,
-          originalText: orig,
-          suggestedText: fix,
-          startOffset: numMatch.index,
-          endOffset: numMatch.index + orig.length,
-          lineNumber: getLineNumber(text, numMatch.index),
-          ruleId: 'number-format-uniformity',
-          autoApplicable: true,
-        });
-      }
-    }
-  }
+  // A. Detect continuous identifiers that mistakenly contain commas
+  const commaIdIssues = scanContinuousIdentifiersWithCommas(text);
+  issues.push(...commaIdIssues);
+
+  // B. Detect currency amounts and financial schedule lines missing thousands comma separators
+  // (Comma separation is strictly for currency and financial figures)
+  const currIssues = scanCurrencyThousandsSeparators(text);
+  issues.push(...currIssues);
 
   // 4. Bullet Point Terminal Punctuation Uniformity
   // Check lists of bullet points (starting with - or * or •)
@@ -295,7 +285,7 @@ function formatMarkdownTable(rawLines: string[]): string {
       const cells = colWidths.map((w, cIdx) => {
         const val = row[cIdx] || '';
         // Right-align numeric/currency cells, left-align text
-        const isNumeric = /^[$€£¥]?\s*-?\d+(?:,\d{3})*(?:\.\d+)?%?$/.test(val);
+        const isNumeric = /^[$€£¥₹]?\s*-?\d+(?:,\d+)*(?:\.\d+)?%?$/.test(val);
         return isNumeric ? val.padStart(w, ' ') : val.padEnd(w, ' ');
       });
       formattedRows.push(`| ${cells.join(' | ')} |`);

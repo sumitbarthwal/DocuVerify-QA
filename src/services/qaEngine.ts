@@ -134,13 +134,28 @@ export function runFullDocumentQA(text: string, config: RuleConfig = DEFAULT_RUL
   }
 
   // Deduplicate overlapping issues (keep the most specific / severe)
-  const sortedIssues = allIssues.sort((a, b) => a.startOffset - b.startOffset);
+  const sortedIssues = allIssues.sort((a, b) => {
+    if (a.startOffset !== b.startOffset) return a.startOffset - b.startOffset;
+    const sevRank: Record<string, number> = { critical: 3, warning: 2, suggestion: 1 };
+    return (sevRank[b.severity] || 0) - (sevRank[a.severity] || 0);
+  });
+
+  const dedupedIssues: QAIssue[] = [];
+  for (const issue of sortedIssues) {
+    const existing = dedupedIssues.find(
+      d => (d.startOffset === issue.startOffset && d.endOffset === issue.endOffset) ||
+           (issue.startOffset >= d.startOffset && issue.endOffset <= d.endOffset && d.category === issue.category)
+    );
+    if (!existing) {
+      dedupedIssues.push(issue);
+    }
+  }
 
   // Compute stats and quality score
-  const stats = calculateReportStats(text, sortedIssues, continuityStats, extractedMetrics);
+  const stats = calculateReportStats(text, dedupedIssues, continuityStats, extractedMetrics);
 
   return {
-    issues: sortedIssues,
+    issues: dedupedIssues,
     stats,
   };
 }

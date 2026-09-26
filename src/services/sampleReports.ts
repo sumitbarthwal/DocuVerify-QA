@@ -136,18 +136,21 @@ The division territory matrix below contains unpopulated default cells from the 
     id: 'surveying-loss-assessment',
     title: 'Insurance Survey & Loss Assessment (Full Audit)',
     category: 'Surveying & Loss Assessment',
-    description: 'Verifies surveying sequence, policy variances, table vs remarks reconciliation, unlinked template entity residue, missing annexures, and photo plate correlation.',
+    description: 'Verifies surveying sequence, continuous identifiers (Case ID, Policy No, PIN, License without commas), currency comma requirements, table vs remarks reconciliation, and photo plate correlation.',
     content: `# Standard Survey & Final Loss Assessment Report
 
 ## 1. Policy & Claim Particulars
 - Insurer: Apex General Insurance Underwriters Corp.
 - Insured: Metro Logistics & Cold Chain Freight Ltd.
+- Case ID: 104,928
 - Policy No: POL-2024-88491-M
 - Claim No: CLM-772910-G
+- Driving License No: 48,39,201
+- PIN Code: 110,001
 - Vehicle Reg No: MH-04-AZ-9921
 - Survey Reference No: SRV-2024-1102
-- Place of Loss: Mumbai Central Logistics Hub
-- Place of Survey: Pune Authorized Workshop
+- Place of Loss: Mumbai Central Logistics Hub, PIN: 400,001
+- Place of Survey: Pune Authorized Workshop, PIN: 411,001
 
 ## 2. Chronological Sequence of Events
 The following chronology establishes the timeline of casualty, notice, and field inspections:
@@ -163,9 +166,9 @@ The following chronology establishes the timeline of casualty, notice, and field
 ## 3. Schedule of Assessment (Loss Computation Table)
 Following physical verification of damaged components and disassembly at the authorized workshop, the loss is itemized below:
 
-- Gross Loss Assessed: $140,000
+- Gross Loss Assessed: $140000
 - Less: Depreciation Amount: $18,000
-- Less: Salvage Value: $12,500
+- Less: Salvage Value: $12500
 - Less: Policy Excess: $5,000
 - Net Assessed Liability: $104,500
 

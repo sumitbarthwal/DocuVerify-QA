@@ -6,15 +6,22 @@ export function downloadWordDocument(filename: string, content: string, title: s
   const docTitle = titleMatch ? titleMatch[1].trim() : title;
 
   const refMatch = content.match(/\b(?:survey\s*ref(?:erence)?(?:\s*no\.?|#)?|ref(?:erence)?\s*(?:no\.?|#)?)\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{4,30})\b/i);
-  const surveyRef = refMatch ? refMatch[1].trim() : 'REF-DOC-2024';
+  const surveyRef = refMatch ? refMatch[1].trim().replace(/,/g, '') : 'REF-DOC-2024';
+
+  const caseMatch = content.match(/\b(?:case\s*(?:id|no\.?|number|#))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{4,30})\b/i);
+  const caseId = caseMatch ? caseMatch[1].trim().replace(/,/g, '') : '';
 
   const policyMatch = content.match(/\b(?:policy\s*(?:no\.?|number|#))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{4,30})\b/i);
-  const policyNo = policyMatch ? policyMatch[1].trim() : '';
+  const policyNo = policyMatch ? policyMatch[1].trim().replace(/,/g, '') : '';
 
   const claimMatch = content.match(/\b(?:claim\s*(?:no\.?|number|#))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{4,30})\b/i);
-  const claimNo = claimMatch ? claimMatch[1].trim() : '';
+  const claimNo = claimMatch ? claimMatch[1].trim().replace(/,/g, '') : '';
 
-  const leftFooterText = [policyNo ? `Policy: ${policyNo}` : '', claimNo ? `Claim: ${claimNo}` : ''].filter(Boolean).join(' | ') || "Chingham's DocuVerify QA Audit Engine";
+  const leftFooterText = [
+    caseId ? `Case: ${caseId}` : '',
+    policyNo ? `Policy: ${policyNo}` : '',
+    claimNo ? `Claim: ${claimNo}` : ''
+  ].filter(Boolean).join(' | ') || "Chingham's DocuVerify QA Audit Engine";
 
   // Generate a clean HTML-based Office Word file (.doc/.docx compatible)
   // Utilizes Microsoft Word MSO XML specification for native running headers, running footers, and dynamic page numbering

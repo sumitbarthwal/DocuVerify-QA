@@ -15,7 +15,7 @@ export interface WorkflowDateEntry {
 }
 
 export interface IdentifierOccurrence {
-  type: 'policy' | 'claim' | 'registration' | 'survey_ref';
+  type: 'policy' | 'claim' | 'registration' | 'survey_ref' | 'case' | 'license' | 'pin' | 'chassis';
   label: string;
   identifierValue: string;
   rawSnippet: string;
@@ -248,22 +248,42 @@ export function checkSurveyingIdentifiers(text: string): QAIssue[] {
     {
       type: 'policy' as const,
       label: 'Policy Number',
-      regex: /\b(?:policy\s*(?:no\.?|number|#|ref(?:erence)?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{5,32})\b/gi,
+      regex: /\b(?:policy\s*(?:no\.?|number|#|ref(?:erence)?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{5,32})\b/gi,
     },
     {
       type: 'claim' as const,
       label: 'Claim Number',
-      regex: /\b(?:claim\s*(?:no\.?|number|#|ref(?:erence)?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{5,32})\b/gi,
+      regex: /\b(?:claim\s*(?:no\.?|number|#|ref(?:erence)?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{5,32})\b/gi,
+    },
+    {
+      type: 'case' as const,
+      label: 'Case ID / Reference',
+      regex: /\b(?:case\s*(?:id|no\.?|number|#|ref(?:erence)?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{4,32})\b/gi,
+    },
+    {
+      type: 'license' as const,
+      label: 'Driving License No',
+      regex: /\b(?:(?:driving\s*)?licen[sc]e\s*(?:no\.?|number|#)|dl\s*(?:no\.?|number|#))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{4,30})\b/gi,
     },
     {
       type: 'registration' as const,
-      label: 'Vehicle / Asset Reg No',
-      regex: /\b(?:(?:vehicle\s*)?reg(?:istration)?\s*(?:no\.?|number|#)|chassis\s*(?:no\.?|number)|asset\s*(?:id|no\.?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{5,25})\b/gi,
+      label: 'Vehicle Reg No',
+      regex: /\b(?:(?:vehicle\s*)?reg(?:istration)?\s*(?:no\.?|number|#)|asset\s*(?:id|no\.?))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{5,25})\b/gi,
+    },
+    {
+      type: 'chassis' as const,
+      label: 'Chassis / Engine No',
+      regex: /\b(?:chassis\s*(?:no\.?|number|#)|engine\s*(?:no\.?|number|#)|vin\s*(?:no\.?|number|#))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{5,25})\b/gi,
+    },
+    {
+      type: 'pin' as const,
+      label: 'PIN / Postal Code',
+      regex: /\b(?:pin\s*(?:code)?|postal\s*(?:code)?|zip\s*(?:code)?)\s*[:=–-]?\s*([0-9,]{5,10})\b/gi,
     },
     {
       type: 'survey_ref' as const,
       label: 'Survey Reference No',
-      regex: /\b(?:survey\s*(?:ref(?:erence)?|report\s*(?:no\.?|number|#)))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.]{5,30})\b/gi,
+      regex: /\b(?:survey\s*(?:ref(?:erence)?|report\s*(?:no\.?|number|#)))\s*[:=–-]?\s*([A-Za-z0-9\/\-\.,]{5,30})\b/gi,
     },
   ];
 
@@ -273,7 +293,7 @@ export function checkSurveyingIdentifiers(text: string): QAIssue[] {
     const rx = new RegExp(cfg.regex.source, cfg.regex.flags);
 
     while ((match = rx.exec(text)) !== null) {
-      const val = match[1].trim();
+      const val = match[1].trim().replace(/[,.]\s*$/, '');
       // Exclude placeholder labels like "XXXX", "TBD", "NOT_AVAILABLE"
       if (/^(tbd|tba|xxxx|pending|nil|na|n\/a)$/i.test(val)) continue;
 
@@ -289,10 +309,10 @@ export function checkSurveyingIdentifiers(text: string): QAIssue[] {
     }
 
     if (occurrences.length > 1) {
-      // Group occurrences by normalized identifier
+      // Group occurrences by normalized identifier (strip commas and spaces so "104,928" matches "104928")
       const valueMap = new Map<string, IdentifierOccurrence[]>();
       for (const occ of occurrences) {
-        const norm = occ.identifierValue.toUpperCase();
+        const norm = occ.identifierValue.toUpperCase().replace(/[, -]/g, '');
         if (!valueMap.has(norm)) {
           valueMap.set(norm, []);
         }
