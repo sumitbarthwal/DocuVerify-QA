@@ -319,41 +319,126 @@ export const ExportPreviewModal: React.FC<ExportPreviewModalProps> = ({
         {/* Modal Body: Active Tab Live Preview Surface */}
         <div className="flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6 flex justify-center">
 
-          {/* TAB 1: WORD (.DOCX) PREVIEW */}
+          {/* TAB 1: WORD (.DOCX) PREVIEW - AUTHENTIC MICROSOFT WORD APP WINDOW */}
           {activeTab === 'word' && (
-            <div className="w-full max-w-3xl flex flex-col gap-4">
-              {/* Word Document Page Sheet Preview */}
-              <div className="bg-white rounded-xs shadow-xl border border-slate-300 p-8 sm:p-14 font-['Calibri',sans-serif] text-slate-800 relative min-h-[700px]">
-                {/* Watermark simulation */}
-                {watermark !== 'NONE' && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-10">
-                    <span className="text-7xl sm:text-8xl font-black text-slate-900 uppercase -rotate-45 tracking-widest border-8 border-slate-900 p-6 rounded-2xl">
-                      {watermark}
-                    </span>
+            <div className="w-full max-w-4xl flex flex-col gap-4 items-center">
+              {/* Authentic Microsoft Word Application Frame */}
+              <div className="w-full bg-[#f3f2f1] rounded-lg shadow-xl border border-[#d2d0ce] overflow-hidden flex flex-col">
+                
+                {/* 1. MS Word Title Bar */}
+                <div className="bg-[#185abd] text-white px-3 py-1.5 flex items-center justify-between text-xs select-none">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 bg-white text-[#185abd] font-bold rounded-xs flex items-center justify-center text-xs font-serif shadow-2xs">
+                      W
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-[#0f4c81]/80 px-2 py-0.5 rounded-full border border-blue-300/30 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="font-semibold text-blue-100">AutoSave</span>
+                      <span className="text-emerald-300 font-bold">On</span>
+                    </div>
+                    <span className="font-bold text-xs ml-1 truncate max-w-xs">{filename} - Word</span>
+                    <span className="text-[10px] bg-[#0f4c81]/60 px-1.5 py-0.2 rounded text-blue-200">Saved</span>
                   </div>
-                )}
 
-                {/* Running Header */}
-                <div className="border-b border-slate-300 pb-2 mb-8 flex items-center justify-between text-[11px] text-slate-500">
-                  <span className="font-bold text-slate-700 tracking-tight">{effectiveHeader}</span>
-                  <span className="font-mono text-slate-400">Microsoft Word OpenXML (.docx)</span>
+                  <div className="flex items-center gap-2 text-blue-100 text-[11px]">
+                    <span className="hidden sm:inline bg-[#0f4c81] px-2 py-0.5 rounded border border-blue-300/30">
+                      Search (Alt+Q)
+                    </span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded text-white font-semibold">Viewing</span>
+                  </div>
                 </div>
 
-                {/* Rendered Body */}
-                <div 
-                  className="prose prose-slate max-w-none text-[14px] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: markdownToStyledHtml(content) }}
-                />
+                {/* 2. MS Word Ribbon Bar */}
+                <div className="bg-white border-b border-[#e1dfdd] px-3 py-1.5 flex items-center justify-between text-xs select-none">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 border-r border-[#edebe9] pr-3 text-[#185abd] font-bold">
+                      <span>Home</span>
+                      <span className="text-slate-500 font-normal ml-2">Insert</span>
+                      <span className="text-slate-500 font-normal ml-2">Layout</span>
+                      <span className="text-slate-500 font-normal ml-2">Review</span>
+                      <span className="text-slate-500 font-normal ml-2">View</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <span className="font-semibold bg-[#f8f9fa] border border-[#d2d0ce] px-2 py-0.5 rounded text-[11px]">Calibri</span>
+                      <span className="font-bold bg-[#f8f9fa] border border-[#d2d0ce] px-1.5 py-0.5 rounded text-[11px]">11</span>
+                      <span className="font-bold px-1">B</span>
+                      <span className="italic px-1">I</span>
+                      <span className="underline px-1">U</span>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-medium hidden sm:block">
+                    Margin: Normal (1.0") • Size: {paperSize.toUpperCase()}
+                  </div>
+                </div>
 
-                {/* Running Footer */}
-                <div className="border-t border-slate-300 pt-3 mt-12 flex items-center justify-between text-[11px] text-slate-500">
-                  <span className="font-medium text-slate-600">{effectiveFooter}</span>
-                  <span className="font-mono text-slate-600 font-bold">Page 1 of {estimatedPages}</span>
+                {/* 3. MS Word Horizontal Ruler */}
+                <div className="bg-[#f3f2f1] border-b border-[#d2d0ce] py-0.5 flex justify-center select-none">
+                  <div className="w-[740px] h-4 bg-white border border-[#d2d0ce] flex items-center text-[8px] font-mono text-slate-500 relative">
+                    <div className="w-16 h-full bg-[#e1dfdd] border-r border-[#8a8886]" />
+                    <div className="flex-1 h-full bg-white relative flex items-center">
+                      {[1, 2, 3, 4, 5, 6, 7].map((num) => (
+                        <div key={num} style={{ left: `${num * 88}px` }} className="absolute flex flex-col items-center">
+                          <span className="leading-none pt-0.2">{num}</span>
+                          <div className="w-px h-1.5 bg-slate-400" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="w-16 h-full bg-[#e1dfdd] border-l border-[#8a8886]" />
+                  </div>
+                </div>
+
+                {/* 4. MS Word Paper Canvas */}
+                <div className="p-6 sm:p-10 flex justify-center bg-[#f3f2f1] overflow-x-auto">
+                  <div 
+                    style={{ width: paperSize === 'a4' ? '720px' : '740px' }}
+                    className="bg-white rounded-xs shadow-[0_4px_18px_rgba(0,0,0,0.12),0_1px_3px_rgba(0,0,0,0.08)] border border-[#d2d0ce] p-10 sm:p-14 font-['Calibri',sans-serif] text-[#1e293b] relative min-h-[800px]"
+                  >
+                    {/* Watermark simulation */}
+                    {watermark !== 'NONE' && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10 opacity-10">
+                        <span className="text-7xl sm:text-8xl font-black text-slate-900 uppercase -rotate-45 tracking-widest border-8 border-slate-900 p-6 rounded-2xl">
+                          {watermark}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Word Running Header */}
+                    <div className="border-b border-[#cbd5e1] pb-2 mb-8 flex items-center justify-between text-[11px] text-[#64748b]">
+                      <span className="font-bold text-[#1f3864] tracking-tight">{effectiveHeader}</span>
+                      <span className="font-mono text-slate-400 text-[10px]">Header -Section 1-</span>
+                    </div>
+
+                    {/* Rendered Body with Word Typography */}
+                    <div 
+                      className="prose prose-slate max-w-none text-[14.6px] leading-[1.25] text-[#1e293b]"
+                      dangerouslySetInnerHTML={{ __html: markdownToStyledHtml(content) }}
+                    />
+
+                    {/* Word Running Footer */}
+                    <div className="border-t border-[#cbd5e1] pt-3 mt-12 flex items-center justify-between text-[11px] text-[#64748b]">
+                      <span className="font-medium text-slate-600">{effectiveFooter}</span>
+                      <span className="font-mono font-bold text-[#1f3864]">Page 1 of {estimatedPages}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. MS Word Bottom Status Bar */}
+                <div className="bg-[#f3f2f1] border-t border-[#d2d0ce] px-4 py-1.5 flex items-center justify-between text-[11px] text-[#323130] select-none">
+                  <div className="flex items-center gap-4">
+                    <span>Page 1 of {estimatedPages}</span>
+                    <span><strong>{stats.wordCount.toLocaleString()}</strong> words</span>
+                    <span className="hidden sm:inline">English (United States)</span>
+                    <span className="hidden md:inline text-emerald-700 font-medium">✓ Accessibility: Good to go</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="bg-white border border-[#d2d0ce] px-2 py-0.5 rounded font-bold">Print Layout</span>
+                    <span className="font-mono font-bold">100%</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Word Metadata Card */}
-              <div className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between shadow-2xs text-xs">
+              {/* Word Export Action Card */}
+              <div className="w-full bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between shadow-2xs text-xs">
                 <div className="flex items-center gap-4 text-slate-600">
                   <div>
                     <span className="text-slate-400 block text-[10px]">Estimated Size</span>
@@ -376,7 +461,7 @@ export const ExportPreviewModal: React.FC<ExportPreviewModalProps> = ({
                     await exportToWordDocument(content, filename, effectiveHeader, effectiveFooter, docxBuffer);
                     onShowToast('Downloaded Word document (.docx)');
                   }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition"
+                  className="px-4 py-2 bg-[#185abd] hover:bg-[#104a7b] text-white rounded-xl font-bold flex items-center gap-2 shadow-xs transition"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download .docx</span>

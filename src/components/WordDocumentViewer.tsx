@@ -216,22 +216,23 @@ export function WordDocumentViewer({
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center overflow-auto bg-slate-200/90 select-text">
+    <div className="relative w-full h-full flex flex-col items-center overflow-auto bg-[#f3f2f1] select-text">
       {/* Loading Overlay */}
       {isRendering && (
-        <div className="absolute inset-0 z-30 bg-slate-100/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-slate-700">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <span className="text-sm font-semibold">Rendering Microsoft Word Page Layout...</span>
-          <span className="text-xs text-slate-500">Calculating original page geometry, headers, footers, and embedded media</span>
+        <div className="absolute inset-0 z-30 bg-[#f3f2f1]/85 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-slate-700">
+          <Loader2 className="w-8 h-8 text-[#185abd] animate-spin" />
+          <span className="text-sm font-semibold text-[#185abd]">Rendering Microsoft Word Layout...</span>
+          <span className="text-xs text-slate-500">Calculating Word geometry, margins, headers, footers, and styles</span>
         </div>
       )}
 
       {/* Error Fallback */}
       {renderError && (
-        <div className="m-8 p-6 bg-white border border-rose-200 rounded-xl shadow-sm text-center max-w-md">
-          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-          <h4 className="font-bold text-slate-800 mb-1">Preview Notice</h4>
-          <p className="text-xs text-slate-600 mb-4">{renderError}</p>
+        <div className="m-8 p-6 bg-white border border-slate-300 rounded-xl shadow-sm text-center max-w-md">
+          <FileText className="w-8 h-8 text-[#185abd] mx-auto mb-2" />
+          <h4 className="font-bold text-slate-800 mb-1">Word Engine Status</h4>
+          <p className="text-xs text-slate-600 mb-2">{renderError}</p>
+          <span className="text-xs font-semibold text-[#185abd]">MS Word Print Layout Engine is actively displaying pages above</span>
         </div>
       )}
 

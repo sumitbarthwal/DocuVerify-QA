@@ -51,6 +51,14 @@ interface DocumentEditorProps {
   onApplyManualFix?: (issue: QAIssue, replacement: string) => void;
   onIgnoreIssue?: (issueId: string) => void;
   onOpenExportPreview?: () => void;
+  filename?: string;
+  onApplyAllVerified?: () => void;
+  onTriggerAiScan?: () => void;
+  isAiScanning?: boolean;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -70,6 +78,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onApplyManualFix,
   onIgnoreIssue,
   onOpenExportPreview,
+  filename,
+  onApplyAllVerified,
+  onTriggerAiScan,
+  isAiScanning,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }) => {
   const [viewMode, setViewMode] = useState<'page' | 'split' | 'edit' | 'preview'>('page');
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -528,6 +544,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             onApplyManualFix={onApplyManualFix}
             onIgnoreIssue={onIgnoreIssue}
             onJumpToEditor={jumpToIssueInEditor}
+            filename={filename}
+            onApplyAllVerified={onApplyAllVerified}
+            onTriggerAiScan={onTriggerAiScan}
+            isAiScanning={isAiScanning}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={onUndo}
+            onRedo={onRedo}
           />
         ) : viewMode === 'split' ? (
           /* Split View: Left side Text Editor, Right side Live Document Page View */
@@ -563,15 +587,15 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             </div>
 
             {/* Right Column: Live Word Page View */}
-            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col overflow-hidden bg-slate-100">
-              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700 flex items-center justify-between">
+            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col overflow-hidden bg-[#f3f2f1]">
+              <div className="px-3 py-1.5 bg-white border-b border-[#d2d0ce] text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Live Word Document Preview</span>
+                  <FileText className="w-3.5 h-3.5 text-[#185abd]" />
+                  <span className="font-bold text-[#185abd]">Microsoft Word Live Preview</span>
                 </span>
-                <span className="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                <span className="text-[11px] font-medium text-emerald-700 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Live Rendering
+                  Live Synchronized
                 </span>
               </div>
               <div className="flex-1 overflow-hidden">
@@ -592,6 +616,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   onApplyManualFix={onApplyManualFix}
                   onIgnoreIssue={onIgnoreIssue}
                   onJumpToEditor={jumpToIssueInEditor}
+                  filename={filename}
+                  onApplyAllVerified={onApplyAllVerified}
+                  onTriggerAiScan={onTriggerAiScan}
+                  isAiScanning={isAiScanning}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  onUndo={onUndo}
+                  onRedo={onRedo}
                 />
               </div>
             </div>

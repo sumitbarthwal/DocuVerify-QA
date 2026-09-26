@@ -712,6 +712,14 @@ export default function App() {
             onApplyManualFix={handleApplyManualFix}
             onIgnoreIssue={handleIgnoreIssue}
             onOpenExportPreview={() => setExportModalOpen(true)}
+            filename={filename}
+            onApplyAllVerified={handleApplyAllVerified}
+            onTriggerAiScan={handleTriggerAiScan}
+            isAiScanning={isAiScanning}
+            canUndo={historyIndex > 0}
+            canRedo={historyIndex < history.length - 1}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
           />
         </div>
 
