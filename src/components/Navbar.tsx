@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Layers,
   History,
-  CloudCheck,
   Check,
   Eye,
   Play,
