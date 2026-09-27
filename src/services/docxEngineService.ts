@@ -25,6 +25,35 @@ function escapeXml(str: string): string {
 }
 
 /**
+ * Parses markdown inline formatting (**bold**, *italic*, __underline__)
+ * into authentic Microsoft Word OpenXML run (<w:r>) elements.
+ */
+function parseInlineMarkdownRuns(text: string): string {
+  if (!text) return '';
+  // Split on bold, underline, italic markdown patterns
+  const tokens = text.split(/(\*\*.*?\*\*|__.*?__|\*[^*]+?\*)/g);
+  return tokens.map(token => {
+    if (!token) return '';
+    // Bold
+    if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
+      const inner = token.slice(2, -2);
+      return `<w:r><w:rPr><w:b/><w:color w:val="1E293B"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+    // Underline
+    if (token.startsWith('__') && token.endsWith('__') && token.length >= 4) {
+      const inner = token.slice(2, -2);
+      return `<w:r><w:rPr><w:u w:val="single"/><w:color w:val="1E293B"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+    // Italic
+    if (token.startsWith('*') && token.endsWith('*') && token.length >= 2) {
+      const inner = token.slice(1, -1);
+      return `<w:r><w:rPr><w:i/><w:color w:val="334155"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+    return `<w:r><w:t xml:space="preserve">${escapeXml(token)}</w:t></w:r>`;
+  }).join('');
+}
+
+/**
  * Converts a dataUrl or blob url to binary Uint8Array for embedding in docx zip.
  */
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
@@ -248,7 +277,14 @@ export async function createStandardDocxPackage(
     const rawLine = lines[i];
     const line = rawLine.trim();
 
-    // Table parsing
+    // 1. Page Break Divider (--- or *** or <!-- Page Break -->)
+    if (line === '---' || line === '***' || line === '___' || line.includes('<!-- Page Break -->') || line.toLowerCase().includes('page-break')) {
+      bodyXml.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
+      i++;
+      continue;
+    }
+
+    // 2. Table parsing
     if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*[-:]+[-| :]*\|?\s*$/.test(lines[i + 1])) {
       const headerCells = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
       bodyXml.push('<w:tbl>');
@@ -256,10 +292,10 @@ export async function createStandardDocxPackage(
         <w:tblPr>
           <w:tblW w:w="5000" w:type="pct"/>
           <w:tblBorders>
-            <w:top w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
-            <w:left w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
-            <w:bottom w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
-            <w:right w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+            <w:top w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+            <w:left w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+            <w:bottom w:val="single" w:sz="8" w:space="0" w:color="185ABD"/>
+            <w:right w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
             <w:insideH w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>
             <w:insideV w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>
           </w:tblBorders>
@@ -289,7 +325,7 @@ export async function createStandardDocxPackage(
         const rowCells = lines[i].trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
         bodyXml.push('<w:tr>');
         rowCells.forEach(cell => {
-          const isNum = /^[$€£¥]?\s*-?\d+(?:,\d{3})*(?:\.\d+)?%?$/.test(cell);
+          const isNum = /^[$€£¥₹]?\s*-?\d+(?:,\d{3})*(?:\.\d+)?%?$/.test(cell);
           bodyXml.push(`
             <w:tc>
               <w:tcPr>
@@ -297,7 +333,7 @@ export async function createStandardDocxPackage(
               </w:tcPr>
               <w:p>
                 <w:pPr><w:jc w:val="${isNum ? 'right' : 'left'}"/><w:spacing w:after="0"/></w:pPr>
-                <w:r><w:rPr><w:sz w:val="20"/><w:color w:val="1E293B"/></w:rPr><w:t>${escapeXml(cell)}</w:t></w:r>
+                ${parseInlineMarkdownRuns(cell)}
               </w:p>
             </w:tc>
           `);
@@ -309,7 +345,23 @@ export async function createStandardDocxPackage(
       continue;
     }
 
-    // Headings
+    // 3. Blockquote
+    if (line.startsWith('> ')) {
+      bodyXml.push(`
+        <w:p>
+          <w:pPr>
+            <w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="185ABD"/></w:pPr>
+            <w:ind w:left="360"/>
+            <w:spacing w:before="120" w:after="120"/>
+          </w:pPr>
+          ${parseInlineMarkdownRuns(line.slice(2))}
+        </w:p>
+      `);
+      i++;
+      continue;
+    }
+
+    // 4. Headings
     if (line.startsWith('# ')) {
       bodyXml.push(`
         <w:p>
@@ -338,17 +390,18 @@ export async function createStandardDocxPackage(
             <w:ind w:left="400" w:hanging="200"/>
             <w:spacing w:after="80"/>
           </w:pPr>
-          <w:r><w:rPr><w:b/></w:rPr><w:t>• </w:t></w:r>
-          <w:r><w:t>${escapeXml(line.slice(2))}</w:t></w:r>
+          <w:r><w:rPr><w:b/><w:color w:val="185ABD"/></w:rPr><w:t>• </w:t></w:r>
+          ${parseInlineMarkdownRuns(line.slice(2))}
         </w:p>
       `);
     } else if (line.length === 0) {
       bodyXml.push('<w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>');
     } else {
-      // Normal paragraph
+      // Normal paragraph with inline formatting
       bodyXml.push(`
         <w:p>
-          <w:r><w:t>${escapeXml(line)}</w:t></w:r>
+          <w:pPr><w:spacing w:line="276" w:lineRule="auto" w:after="140"/></w:pPr>
+          ${parseInlineMarkdownRuns(line)}
         </w:p>
       `);
     }

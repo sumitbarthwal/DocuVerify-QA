@@ -299,6 +299,7 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
 
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const inPageEditorRef = useRef<HTMLTextAreaElement>(null);
+  const rulerScrollRef = useRef<HTMLDivElement>(null);
 
   // Keep local edited text in sync when external content changes
   useEffect(() => {
@@ -350,6 +351,24 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
     }
     return { width: 816, minHeight: 1056 };
   }, [paperSize]);
+
+  // Zoom scale calculations for unclipped, scrollable rendering
+  const scale = zoomLevel / 100;
+  const scaledWidth = Math.round(paperDimensions.width * scale);
+
+  const handlePageContainerScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (rulerScrollRef.current) {
+      rulerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
+  const handleFitToWidth = () => {
+    if (!pageContainerRef.current) return;
+    const containerWidth = pageContainerRef.current.clientWidth - 48; // padding margin
+    const optimalZoom = Math.min(140, Math.max(60, Math.floor((containerWidth / paperDimensions.width) * 100)));
+    setZoomLevel(optimalZoom);
+    showStatusNotice(`Zoom adjusted to fit page width (${optimalZoom}%)`);
+  };
 
   // Margins in pixels
   const marginPadding = useMemo(() => {
@@ -1242,49 +1261,62 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
       {/* 3. AUTHENTIC MICROSOFT WORD DUAL RULER                                    */}
       {/* ========================================================================= */}
       {showRuler && viewMode !== 'raw-openxml' && (
-        <div className="w-full bg-[#f3f2f1] border-b border-[#d2d0ce] flex justify-center overflow-hidden select-none shrink-0 z-10 py-0.5">
+        <div 
+          ref={rulerScrollRef}
+          className="w-full bg-[#f3f2f1] border-b border-[#d2d0ce] overflow-x-hidden select-none shrink-0 z-10 py-0.5"
+        >
           <div 
-            style={{ width: paperDimensions.width, transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-            className="h-5 bg-white border border-[#d2d0ce] shadow-2xs relative flex items-center text-[9px] font-mono text-slate-600"
+            style={{ minWidth: `${scaledWidth + 48}px` }}
+            className="w-full flex justify-center"
           >
-            {/* Left Margin Gray Zone */}
             <div 
-              style={{ width: marginPadding.left }}
-              className="h-full bg-[#e1dfdd] border-r border-[#8a8886] relative flex items-center justify-end pr-1 text-[8px] text-slate-500"
+              style={{ width: `${scaledWidth}px`, minWidth: `${scaledWidth}px` }}
+              className="relative overflow-hidden"
             >
-              {/* Left Margin Indent Marker */}
-              <div className="absolute -bottom-1 left-2 w-0 h-0 border-x-4 border-x-transparent border-b-6 border-b-slate-700" title="First Line Indent" />
-            </div>
-
-            {/* Printable White Ruler Zone with Numbered Inch Graduation Ticks */}
-            <div className="flex-1 h-full bg-white relative flex items-center">
-              {Array.from({ length: 8 }).map((_, inchIdx) => (
+              <div 
+                style={{ width: `${paperDimensions.width}px`, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+                className="h-5 bg-white border border-[#d2d0ce] shadow-2xs relative flex items-center text-[9px] font-mono text-slate-600"
+              >
+                {/* Left Margin Gray Zone */}
                 <div 
-                  key={`inch-${inchIdx}`} 
-                  style={{ left: `${(inchIdx + 1) * 96}px` }}
-                  className="absolute top-0 bottom-0 flex flex-col items-center justify-between"
+                  style={{ width: marginPadding.left }}
+                  className="h-full bg-[#e1dfdd] border-r border-[#8a8886] relative flex items-center justify-end pr-1 text-[8px] text-slate-500"
                 >
-                  <span className="text-[9px] font-semibold text-slate-700 leading-none pt-0.5">{inchIdx + 1}</span>
-                  <div className="w-px h-2 bg-slate-400" />
+                  {/* Left Margin Indent Marker */}
+                  <div className="absolute -bottom-1 left-2 w-0 h-0 border-x-4 border-x-transparent border-b-6 border-b-slate-700" title="First Line Indent" />
                 </div>
-              ))}
-              {/* Half-inch ticks */}
-              {Array.from({ length: 8 }).map((_, halfIdx) => (
-                <div 
-                  key={`half-${halfIdx}`} 
-                  style={{ left: `${halfIdx * 96 + 48}px` }}
-                  className="absolute bottom-0 w-px h-1.5 bg-slate-300"
-                />
-              ))}
-            </div>
 
-            {/* Right Margin Gray Zone */}
-            <div 
-              style={{ width: marginPadding.right }}
-              className="h-full bg-[#e1dfdd] border-l border-[#8a8886] relative flex items-center pl-1 text-[8px] text-slate-500"
-            >
-              {/* Right Margin Stop */}
-              <div className="absolute -bottom-1 right-2 w-0 h-0 border-x-4 border-x-transparent border-b-6 border-b-slate-700" title="Right Margin Stop" />
+                {/* Printable White Ruler Zone with Numbered Inch Graduation Ticks */}
+                <div className="flex-1 h-full bg-white relative flex items-center">
+                  {Array.from({ length: 8 }).map((_, inchIdx) => (
+                    <div 
+                      key={`inch-${inchIdx}`} 
+                      style={{ left: `${(inchIdx + 1) * 96}px` }}
+                      className="absolute top-0 bottom-0 flex flex-col items-center justify-between"
+                    >
+                      <span className="text-[9px] font-semibold text-slate-700 leading-none pt-0.5">{inchIdx + 1}</span>
+                      <div className="w-px h-2 bg-slate-400" />
+                    </div>
+                  ))}
+                  {/* Half-inch ticks */}
+                  {Array.from({ length: 8 }).map((_, halfIdx) => (
+                    <div 
+                      key={`half-${halfIdx}`} 
+                      style={{ left: `${halfIdx * 96 + 48}px` }}
+                      className="absolute bottom-0 w-px h-1.5 bg-slate-300"
+                    />
+                  ))}
+                </div>
+
+                {/* Right Margin Gray Zone */}
+                <div 
+                  style={{ width: marginPadding.right }}
+                  className="h-full bg-[#e1dfdd] border-l border-[#8a8886] relative flex items-center pl-1 text-[8px] text-slate-500"
+                >
+                  {/* Right Margin Stop */}
+                  <div className="absolute -bottom-1 right-2 w-0 h-0 border-x-4 border-x-transparent border-b-6 border-b-slate-700" title="Right Margin Stop" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1295,7 +1327,8 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
       {/* ========================================================================= */}
       <div 
         ref={pageContainerRef}
-        className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center scroll-smooth bg-[#f3f2f1]"
+        onScroll={handlePageContainerScroll}
+        className="flex-1 overflow-x-auto overflow-y-auto p-2 sm:p-4 md:p-6 scroll-smooth bg-[#f3f2f1] relative select-text"
         onClick={() => {
           if (activePopoverIssue) {
             setActivePopoverIssue(null);
@@ -1305,9 +1338,17 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
         }}
       >
         <div 
-          style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-          className="transition-transform duration-150 w-full flex flex-col items-center pb-24"
+          style={{ minWidth: `${scaledWidth + 48}px` }}
+          className="w-full min-h-full flex flex-col items-center pb-24"
         >
+          <div 
+            style={{ width: `${scaledWidth}px`, minWidth: `${scaledWidth}px` }}
+            className="flex flex-col items-center relative"
+          >
+            <div 
+              style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: `${paperDimensions.width}px` }}
+              className="transition-transform duration-150 flex flex-col items-center"
+            >
           {/* VIEW: RAW OPENXML VIEWER (IF BINARY DOCX) */}
           {viewMode === 'raw-openxml' && docxBuffer ? (
             <div className="w-full flex flex-col items-center">
@@ -1665,6 +1706,8 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
               })}
             </div>
           )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1820,10 +1863,20 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
             {/* Clickable 100% Reset Pill */}
             <button
               onClick={() => setZoomLevel(100)}
-              className="font-mono font-bold text-slate-700 bg-white border border-[#d2d0ce] hover:border-[#185abd] px-1.5 py-0.5 rounded text-[10px] min-w-[42px] text-center"
+              className="font-mono font-bold text-slate-700 bg-white border border-[#d2d0ce] hover:border-[#185abd] hover:text-[#185abd] px-1.5 py-0.5 rounded text-[10px] min-w-[42px] text-center transition"
               title="Reset Zoom to 100%"
             >
               {zoomLevel}%
+            </button>
+
+            {/* Fit to Window Width */}
+            <button
+              onClick={handleFitToWidth}
+              className="font-semibold text-slate-700 bg-white border border-[#d2d0ce] hover:border-[#185abd] hover:text-[#185abd] px-2 py-0.5 rounded text-[10px] text-center transition flex items-center gap-1 shadow-2xs"
+              title="Fit Document to Window Width (Ctrl+Shift+F)"
+            >
+              <Maximize2 className="w-2.5 h-2.5 text-[#185abd]" />
+              <span>Fit</span>
             </button>
           </div>
         </div>

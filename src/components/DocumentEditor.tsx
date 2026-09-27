@@ -557,7 +557,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           /* Split View: Left side Text Editor, Right side Live Document Page View */
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-slate-200">
             {/* Left Column: Interactive Text Editor */}
-            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col bg-white overflow-hidden">
+            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col bg-white overflow-hidden min-w-0">
               <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Edit3 className="w-3.5 h-3.5 text-blue-600" />
@@ -587,7 +587,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             </div>
 
             {/* Right Column: Live Word Page View */}
-            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col overflow-hidden bg-[#f3f2f1]">
+            <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col overflow-hidden bg-[#f3f2f1] min-w-0">
               <div className="px-3 py-1.5 bg-white border-b border-[#d2d0ce] text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-[#185abd]" />
@@ -643,7 +643,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             </div>
 
             {/* Editable Textarea with Page Break Visualiser Helper Bar */}
-            <div className="flex-1 relative h-full flex flex-col">
+            <div className="flex-1 relative h-full flex flex-col min-w-0">
               <div className="px-4 py-1.5 bg-indigo-50/70 border-b border-indigo-100 text-xs text-indigo-900 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <Scissors className="w-3.5 h-3.5 text-indigo-600" />
@@ -668,7 +668,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 onChange={(e) => onChange(e.target.value)}
                 onScroll={handleScroll}
                 placeholder="Paste, write, or upload your document report here to begin automated QA verification..."
-                className="w-full flex-1 p-4 sm:p-6 outline-hidden resize-none font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 text-[15px] leading-6 bg-white overflow-y-auto selection:bg-blue-100"
+                className="w-full flex-1 p-4 sm:p-6 outline-hidden resize-none font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 text-[15px] leading-6 bg-white overflow-y-auto overflow-x-auto selection:bg-blue-100"
                 spellCheck={false}
               />
             </div>

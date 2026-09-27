@@ -657,15 +657,9 @@ export async function exportToWordDocument(
   filename: string, 
   customHeader?: string, 
   customFooter?: string,
-  existingDocxBuffer?: ArrayBuffer | null
+  _existingDocxBuffer?: ArrayBuffer | null
 ) {
   const baseName = filename.replace(/\.[^/.]+$/, '');
-
-  // If we already have the active DOCX buffer (preserving original formatting, images, headers & footers), download it directly
-  if (existingDocxBuffer && existingDocxBuffer.byteLength > 100) {
-    downloadDocxFile(existingDocxBuffer, `${sanitizeFilename(baseName)}_Verified.docx`);
-    return;
-  }
 
   const titleMatch = content.match(/^#\s+([^\n\r]+)/m);
   const docTitle = titleMatch ? titleMatch[1].trim() : 'Survey & Assessment Report';

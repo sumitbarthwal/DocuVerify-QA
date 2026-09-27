@@ -216,7 +216,7 @@ export function WordDocumentViewer({
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center overflow-auto bg-[#f3f2f1] select-text">
+    <div className="relative w-full h-full flex flex-col overflow-hidden bg-[#f3f2f1] select-text">
       {/* Loading Overlay */}
       {isRendering && (
         <div className="absolute inset-0 z-30 bg-[#f3f2f1]/85 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-slate-700">
@@ -236,18 +236,31 @@ export function WordDocumentViewer({
         </div>
       )}
 
-      {/* Zoomable Word Canvas */}
-      <div 
-        className="w-full flex flex-col items-center py-8 transition-transform duration-150 origin-top"
-        style={{
-          transform: `scale(${zoomLevel / 100})`,
-          transformOrigin: 'top center',
-        }}
-      >
+      {/* Zoomable Word Canvas with Unclipped Horizontal & Vertical Scrolling */}
+      <div className="w-full flex-1 overflow-x-auto overflow-y-auto bg-[#f3f2f1] select-text">
         <div 
-          ref={containerRef} 
-          className="word-docx-preview-root w-full flex flex-col items-center"
-        />
+          style={{ minWidth: `${Math.round(816 * (zoomLevel / 100)) + 48}px` }}
+          className="w-full min-h-full flex flex-col items-center py-6 px-4"
+        >
+          <div 
+            style={{ width: `${Math.round(816 * (zoomLevel / 100))}px`, minWidth: `${Math.round(816 * (zoomLevel / 100))}px` }}
+            className="flex flex-col items-center relative"
+          >
+            <div 
+              style={{
+                transform: `scale(${zoomLevel / 100})`,
+                transformOrigin: 'top left',
+                width: '816px',
+              }}
+              className="transition-transform duration-150 flex flex-col items-center"
+            >
+              <div 
+                ref={containerRef} 
+                className="word-docx-preview-root w-full flex flex-col items-center"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Custom Styles to make docx-preview look like authentic Microsoft Word */}
