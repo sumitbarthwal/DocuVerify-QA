@@ -93,6 +93,7 @@ export interface DocumentPageViewProps {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  onOpenIntelligenceModal?: () => void;
 }
 
 export interface DocumentPageItem {
@@ -256,6 +257,7 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
   canRedo = false,
   onUndo,
   onRedo,
+  onOpenIntelligenceModal,
 }) => {
   // MS Word App Environment State
   const [activeRibbonTab, setActiveRibbonTab] = useState<WordRibbonTab>('home');
@@ -1182,6 +1184,17 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                     >
                       <Sparkles className="w-3.5 h-3.5 text-blue-200" />
                       <span>{isAiScanning ? 'Scanning...' : 'AI Deep Scan'}</span>
+                    </button>
+                  )}
+
+                  {onOpenIntelligenceModal && (
+                    <button
+                      onClick={onOpenIntelligenceModal}
+                      className="px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                      title="Open Document Intelligence Center: Table Math Sums, Timeline Causality, Digits vs. Words, and Citations"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Intelligence Center</span>
                     </button>
                   )}
 

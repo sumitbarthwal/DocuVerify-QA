@@ -72,6 +72,8 @@ interface NavbarProps {
   onOpenAddinModal?: () => void;
   // GitHub & Deployment Guide
   onOpenGitHubModal?: () => void;
+  // Document Intelligence Center
+  onOpenIntelligenceModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -112,6 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenExportPreview,
   onOpenAddinModal,
   onOpenGitHubModal,
+  onOpenIntelligenceModal,
 }) => {
   const [exportOpen, setExportOpen] = useState(false);
   const [samplesOpen, setSamplesOpen] = useState(false);
@@ -279,6 +282,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               {(stats.continuity?.conflictingMetricsFound ?? 0) > 0 && (
                 <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">
                   {stats.continuity.conflictingMetricsFound}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Document Intelligence & Math/Timeline Center */}
+          {onOpenIntelligenceModal && (
+            <button
+              id="btn-doc-intelligence-center"
+              onClick={onOpenIntelligenceModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-900 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Open Document Intelligence: Table Math Sums, Timeline Causality, Digits vs. Words, and Citation Matrix"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span className="hidden md:inline">Intelligence Center</span>
+              {((stats.tableAudits?.filter((t: any) => t.status === 'mismatch').length || 0) +
+                (stats.timelineEvents?.filter((t: any) => t.anomaly).length || 0) +
+                (stats.dualPairs?.filter((d: any) => !d.isMatch).length || 0) +
+                (stats.citationItems?.filter((c: any) => c.status === 'missing_definition').length || 0)) > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                  {(stats.tableAudits?.filter((t: any) => t.status === 'mismatch').length || 0) +
+                    (stats.timelineEvents?.filter((t: any) => t.anomaly).length || 0) +
+                    (stats.dualPairs?.filter((d: any) => !d.isMatch).length || 0) +
+                    (stats.citationItems?.filter((c: any) => c.status === 'missing_definition').length || 0)}
                 </span>
               )}
             </button>

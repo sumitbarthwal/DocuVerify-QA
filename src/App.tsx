@@ -18,6 +18,7 @@ import { NativeAddinModal } from './components/NativeAddinModal';
 import { WordTaskpaneSimulator } from './components/WordTaskpaneSimulator';
 import { TaskpaneStandaloneView } from './components/TaskpaneStandaloneView';
 import { GitHubDeployModal } from './components/GitHubDeployModal';
+import { DocumentIntelligenceModal } from './components/DocumentIntelligenceModal';
 import { detectOfficeHost } from './services/officeAddinService';
 import { 
   QAIssue, 
@@ -115,6 +116,7 @@ export default function App() {
   const [addinModalOpen, setAddinModalOpen] = useState<boolean>(false);
   const [wordSimulatorOpen, setWordSimulatorOpen] = useState<boolean>(false);
   const [githubModalOpen, setGithubModalOpen] = useState<boolean>(false);
+  const [intelligenceModalOpen, setIntelligenceModalOpen] = useState<boolean>(false);
   const [isTaskpaneMode, setIsTaskpaneMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return window.location.search.includes('taskpane') || window.location.search.includes('addin');
@@ -752,6 +754,7 @@ export default function App() {
         onOpenExportPreview={() => setExportModalOpen(true)}
         onOpenAddinModal={() => setAddinModalOpen(true)}
         onOpenGitHubModal={() => setGithubModalOpen(true)}
+        onOpenIntelligenceModal={() => setIntelligenceModalOpen(true)}
       />
 
       {/* Main Workspace */}
@@ -785,6 +788,7 @@ export default function App() {
             canRedo={historyIndex < history.length - 1}
             onUndo={handleUndo}
             onRedo={handleRedo}
+            onOpenIntelligenceModal={() => setIntelligenceModalOpen(true)}
           />
         </div>
 
@@ -962,6 +966,16 @@ export default function App() {
       <GitHubDeployModal
         isOpen={githubModalOpen}
         onClose={() => setGithubModalOpen(false)}
+      />
+
+      {/* Document Intelligence & Precision Center Modal */}
+      <DocumentIntelligenceModal
+        isOpen={intelligenceModalOpen}
+        onClose={() => setIntelligenceModalOpen(false)}
+        stats={stats}
+        issues={activeFilteredIssues}
+        onSelectIssue={(id) => setSelectedIssueId(id)}
+        onApplyFix={handleApplyIssue}
       />
 
       {/* Document Loading & Processing Overlay */}

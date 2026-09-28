@@ -94,6 +94,10 @@ export interface ReportStats {
   readability: ReadabilityMetrics;
   continuity: DataContinuityStats;
   extractedMetrics?: ExtractedMetric[];
+  tableAudits?: any[];
+  timelineEvents?: any[];
+  dualPairs?: any[];
+  citationItems?: any[];
 }
 
 export interface RuleConfig {

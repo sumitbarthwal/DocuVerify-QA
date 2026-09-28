@@ -59,6 +59,7 @@ interface DocumentEditorProps {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  onOpenIntelligenceModal?: () => void;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -86,6 +87,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   canRedo,
   onUndo,
   onRedo,
+  onOpenIntelligenceModal,
 }) => {
   const [viewMode, setViewMode] = useState<'page' | 'split' | 'edit' | 'preview'>('page');
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -552,6 +554,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             canRedo={canRedo}
             onUndo={onUndo}
             onRedo={onRedo}
+            onOpenIntelligenceModal={onOpenIntelligenceModal}
           />
         ) : viewMode === 'split' ? (
           /* Split View: Left side Text Editor, Right side Live Document Page View */

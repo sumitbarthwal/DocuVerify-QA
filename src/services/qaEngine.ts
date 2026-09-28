@@ -11,6 +11,10 @@ import {
   checkPhotoPlateAndExhibitCorrelation
 } from './surveyingRules';
 import { performDeepTableTextCrossScan } from './deepScanService';
+import { verifyTableCalculations, verifyDualNumberAndWordExpressions } from './advancedMathEngine';
+import { analyzeDocumentTimeline } from './timelineIntelligence';
+import { auditDocumentCitations } from './citationIntelligence';
+import { checkProfessionalRegister } from './professionalRegister';
 
 export const DEFAULT_RULE_CONFIG: RuleConfig = {
   checkGrammar: true,
@@ -133,6 +137,34 @@ export function runFullDocumentQA(text: string, config: RuleConfig = DEFAULT_RUL
     allIssues.push(...filtered);
   }
 
+  // 7. Advanced Document Intelligence Engines:
+  // - Mathematical Table Column & Row Sums
+  // - Dual Representation Verification (Digits vs Words)
+  // - Chronological & Causality Timeline Analysis
+  // - Broken Cross-Reference & Citation Resolution Tracker
+  // - Professional Register & Confusable Homophone Precision
+  const mathTableResult = verifyTableCalculations(text);
+  const dualExprResult = verifyDualNumberAndWordExpressions(text);
+  const timelineResult = analyzeDocumentTimeline(text);
+  const citationResult = auditDocumentCitations(text);
+  const profRegisterIssues = checkProfessionalRegister(text);
+
+  allIssues.push(
+    ...mathTableResult.issues,
+    ...dualExprResult.issues,
+    ...timelineResult.issues,
+    ...citationResult.issues,
+    ...profRegisterIssues
+  );
+
+  continuityStats.inconsistenciesDetected += (
+    mathTableResult.issues.length +
+    dualExprResult.issues.length +
+    timelineResult.issues.length +
+    citationResult.issues.length +
+    profRegisterIssues.length
+  );
+
   // Deduplicate overlapping issues (keep the most specific / severe)
   const sortedIssues = allIssues.sort((a, b) => {
     if (a.startOffset !== b.startOffset) return a.startOffset - b.startOffset;
@@ -153,6 +185,10 @@ export function runFullDocumentQA(text: string, config: RuleConfig = DEFAULT_RUL
 
   // Compute stats and quality score
   const stats = calculateReportStats(text, dedupedIssues, continuityStats, extractedMetrics);
+  stats.tableAudits = mathTableResult.tableAudits;
+  stats.timelineEvents = timelineResult.events;
+  stats.dualPairs = dualExprResult.dualPairs;
+  stats.citationItems = citationResult.citationItems;
 
   return {
     issues: dedupedIssues,
