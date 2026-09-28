@@ -22,7 +22,8 @@ import {
   FileJson,
   Sparkles,
   Loader2,
-  Zap
+  Zap,
+  FolderGit2
 } from 'lucide-react';
 import { ReportStats, SampleReport, RecentFileRecord } from '../types';
 import { SAMPLE_REPORTS } from '../services/sampleReports';
@@ -69,6 +70,8 @@ interface NavbarProps {
   onOpenExportPreview?: () => void;
   // Native Editor Add-ins
   onOpenAddinModal?: () => void;
+  // GitHub & Deployment Guide
+  onOpenGitHubModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -108,6 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   aiAvailable = true,
   onOpenExportPreview,
   onOpenAddinModal,
+  onOpenGitHubModal,
 }) => {
   const [exportOpen, setExportOpen] = useState(false);
   const [samplesOpen, setSamplesOpen] = useState(false);
@@ -657,6 +661,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span className="text-[10px] text-slate-400 block">Full archive with issues &amp; metrics</span>
                   </div>
                 </button>
+
+                {/* 9. GitHub & GitHub Pages */}
+                {onOpenGitHubModal && (
+                  <button
+                    id="export-github-option"
+                    onClick={() => {
+                      setExportOpen(false);
+                      onOpenGitHubModal();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <FolderGit2 className="w-4 h-4 text-emerald-600" />
+                    <div>
+                      <span className="font-semibold text-slate-800">GitHub &amp; GitHub Pages</span>
+                      <span className="text-[10px] text-slate-400 block">Push guide, Actions fix &amp; repo ZIP</span>
+                    </div>
+                  </button>
+                )}
 
                 <div className="border-t border-slate-100 my-1"></div>
 

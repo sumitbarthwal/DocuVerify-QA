@@ -17,6 +17,7 @@ import { ExportPreviewModal } from './components/ExportPreviewModal';
 import { NativeAddinModal } from './components/NativeAddinModal';
 import { WordTaskpaneSimulator } from './components/WordTaskpaneSimulator';
 import { TaskpaneStandaloneView } from './components/TaskpaneStandaloneView';
+import { GitHubDeployModal } from './components/GitHubDeployModal';
 import { detectOfficeHost } from './services/officeAddinService';
 import { 
   QAIssue, 
@@ -113,6 +114,7 @@ export default function App() {
   // Native Editor Add-in & Taskpane State
   const [addinModalOpen, setAddinModalOpen] = useState<boolean>(false);
   const [wordSimulatorOpen, setWordSimulatorOpen] = useState<boolean>(false);
+  const [githubModalOpen, setGithubModalOpen] = useState<boolean>(false);
   const [isTaskpaneMode, setIsTaskpaneMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return window.location.search.includes('taskpane') || window.location.search.includes('addin');
@@ -749,6 +751,7 @@ export default function App() {
         aiAvailable={aiStatus?.available ?? true}
         onOpenExportPreview={() => setExportModalOpen(true)}
         onOpenAddinModal={() => setAddinModalOpen(true)}
+        onOpenGitHubModal={() => setGithubModalOpen(true)}
       />
 
       {/* Main Workspace */}
@@ -953,6 +956,12 @@ export default function App() {
           setWordSimulatorOpen(false);
           setAddinModalOpen(true);
         }}
+      />
+
+      {/* GitHub Repository & GitHub Pages Deployment Guide */}
+      <GitHubDeployModal
+        isOpen={githubModalOpen}
+        onClose={() => setGithubModalOpen(false)}
       />
 
       {/* Document Loading & Processing Overlay */}
