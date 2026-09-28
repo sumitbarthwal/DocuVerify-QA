@@ -14,6 +14,10 @@ import { MetricCrossCheckerModal } from './components/MetricCrossCheckerModal';
 import { RecentFilesModal } from './components/RecentFilesModal';
 import { HeaderFooterModal } from './components/HeaderFooterModal';
 import { ExportPreviewModal } from './components/ExportPreviewModal';
+import { NativeAddinModal } from './components/NativeAddinModal';
+import { WordTaskpaneSimulator } from './components/WordTaskpaneSimulator';
+import { TaskpaneStandaloneView } from './components/TaskpaneStandaloneView';
+import { detectOfficeHost } from './services/officeAddinService';
 import { 
   QAIssue, 
   ReportStats, 
@@ -44,7 +48,8 @@ import {
 } from './services/documentFormatsService';
 import {
   patchDocxArrayBuffer,
-  createStandardDocxPackage
+  createStandardDocxPackage,
+  updateDocxHeaderFooter
 } from './services/docxEngineService';
 import { 
   saveDraftToLocalStorage, 
@@ -104,6 +109,16 @@ export default function App() {
 
   // Auto-Save timestamp
   const [autoSaveTimestamp, setAutoSaveTimestamp] = useState<number | null>(null);
+
+  // Native Editor Add-in & Taskpane State
+  const [addinModalOpen, setAddinModalOpen] = useState<boolean>(false);
+  const [wordSimulatorOpen, setWordSimulatorOpen] = useState<boolean>(false);
+  const [isTaskpaneMode, setIsTaskpaneMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.search.includes('taskpane') || window.location.search.includes('addin');
+    }
+    return false;
+  });
 
   // Recent files state
   const [recentFiles, setRecentFiles] = useState<RecentFileRecord[]>(() => {
@@ -254,11 +269,22 @@ export default function App() {
       if (savedDraft.content !== SAMPLE_REPORTS[0].content) {
         setContent(savedDraft.content);
         setFilename(savedDraft.filename || 'Restored_Audit_Document.docx');
+        if (savedDraft.headerText) setHeaderText(savedDraft.headerText);
+        if (savedDraft.footerText) setFooterText(savedDraft.footerText);
         setHistory([savedDraft.content]);
         setHistoryIndex(0);
         setSessionResolvedCount(savedDraft.sessionResolvedCount || 0);
         setSessionBaselineTotal(savedDraft.sessionBaselineTotal || 0);
         setAutoSaveTimestamp(savedDraft.timestamp);
+
+        createStandardDocxPackage(savedDraft.content, {
+          title: (savedDraft.filename || 'Document').replace(/\.[^/.]+$/, ''),
+          headerText: savedDraft.headerText,
+          footerText: savedDraft.footerText,
+        }).then((buf) => {
+          setDocxBuffer(buf);
+        }).catch(() => {});
+
         showToast('Auto-saved audit draft restored from your last session');
         return;
       }
@@ -302,6 +328,8 @@ export default function App() {
         timestamp: now,
         sessionResolvedCount,
         sessionBaselineTotal,
+        headerText,
+        footerText,
       });
       setAutoSaveTimestamp(now);
 
@@ -313,12 +341,14 @@ export default function App() {
         issuesCount: issues.length,
         resolvedCount: sessionResolvedCount,
         format: filename.split('.').pop()?.toUpperCase() || 'DOCX',
+        headerText,
+        footerText,
       });
       setRecentFiles(updatedList);
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [content, filename, sessionResolvedCount, sessionBaselineTotal, stats.qualityScore, issues.length]);
+  }, [content, filename, sessionResolvedCount, sessionBaselineTotal, stats.qualityScore, issues.length, headerText, footerText]);
 
   // Sample report selection
   const handleSelectSample = (sample: SampleReport) => {
@@ -360,11 +390,21 @@ export default function App() {
   const handleQuickLoadRecent = (file: RecentFileRecord) => {
     setContent(file.content);
     setFilename(file.filename);
+    if (file.headerText) setHeaderText(file.headerText);
+    if (file.footerText) setFooterText(file.footerText);
     setHistory([file.content]);
     setHistoryIndex(0);
     setSelectedIssueId(null);
     setSessionResolvedCount(file.resolvedCount || 0);
     setSessionBaselineTotal(file.issuesCount || 0);
+
+    createStandardDocxPackage(file.content, {
+      title: file.filename.replace(/\.[^/.]+$/, ''),
+      headerText: file.headerText,
+      footerText: file.footerText,
+    }).then((buf) => {
+      setDocxBuffer(buf);
+    }).catch(() => {});
 
     // Bump to top of recent files
     const updated = saveRecentWorkedFile(file);
@@ -375,12 +415,22 @@ export default function App() {
   const handleReworkRecent = (file: RecentFileRecord) => {
     setContent(file.content);
     setFilename(file.filename);
+    if (file.headerText) setHeaderText(file.headerText);
+    if (file.footerText) setFooterText(file.footerText);
     setHistory([file.content]);
     setHistoryIndex(0);
     setSelectedIssueId(null);
     // Reset resolution counters for a fresh audit pass
     setSessionResolvedCount(0);
     setSessionBaselineTotal(0);
+
+    createStandardDocxPackage(file.content, {
+      title: file.filename.replace(/\.[^/.]+$/, ''),
+      headerText: file.headerText,
+      footerText: file.footerText,
+    }).then((buf) => {
+      setDocxBuffer(buf);
+    }).catch(() => {});
 
     const updated = saveRecentWorkedFile(file);
     setRecentFiles(updated);
@@ -648,6 +698,17 @@ export default function App() {
     printAuditCertificate(stats, activeFilteredIssues, filename);
   };
 
+  // Render standalone taskpane mode when loaded inside Microsoft Word or via ?mode=taskpane
+  if (isTaskpaneMode) {
+    return (
+      <TaskpaneStandaloneView
+        onExitTaskpaneMode={() => setIsTaskpaneMode(false)}
+        initialContent={content}
+        initialFilename={filename}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Top Navigation */}
@@ -687,6 +748,7 @@ export default function App() {
         isAiScanning={isAiScanning}
         aiAvailable={aiStatus?.available ?? true}
         onOpenExportPreview={() => setExportModalOpen(true)}
+        onOpenAddinModal={() => setAddinModalOpen(true)}
       />
 
       {/* Main Workspace */}
@@ -813,10 +875,26 @@ export default function App() {
         footerText={footerText}
         autoHeader={`Survey & Assessment Report | Ref: SRV-REF-AUTO`}
         autoFooter={`Chingham's DocuVerify QA Audit Engine`}
-        onSave={(h, f) => {
+        onSave={async (h, f) => {
           setHeaderText(h);
           setFooterText(f);
-          showToast('Updated original running header & footer fidelity settings');
+          if (docxBuffer) {
+            try {
+              const updatedBuf = await updateDocxHeaderFooter(docxBuffer, h, f);
+              setDocxBuffer(updatedBuf);
+            } catch (err) {
+              console.warn('Could not update docx header/footer:', err);
+            }
+          } else {
+            createStandardDocxPackage(content, {
+              title: filename.replace(/\.[^/.]+$/, ''),
+              headerText: h,
+              footerText: f,
+            }).then((buf) => {
+              setDocxBuffer(buf);
+            }).catch(() => {});
+          }
+          showToast('Updated running header & footer in authentic document');
         }}
       />
 
@@ -845,6 +923,36 @@ export default function App() {
         footerText={footerText}
         docxBuffer={docxBuffer}
         onShowToast={showToast}
+        onOpenAddinModal={() => {
+          setExportModalOpen(false);
+          setAddinModalOpen(true);
+        }}
+      />
+
+      {/* Native Editor Add-in Suite Hub (MS Word, Excel, Acrobat, Google Docs) */}
+      <NativeAddinModal
+        isOpen={addinModalOpen}
+        onClose={() => setAddinModalOpen(false)}
+        onLaunchWordSimulator={() => setWordSimulatorOpen(true)}
+      />
+
+      {/* Interactive Microsoft Word Environment Simulator */}
+      <WordTaskpaneSimulator
+        isOpen={wordSimulatorOpen}
+        onClose={() => setWordSimulatorOpen(false)}
+        documentContent={content}
+        filename={filename}
+        issues={activeFilteredIssues}
+        stats={stats}
+        onApplyFix={(issueId) => {
+          const target = activeFilteredIssues.find(i => i.id === issueId);
+          if (target) handleApplyIssue(target);
+        }}
+        onApplyAllFixes={handleApplyAllVerified}
+        onOpenAddinModal={() => {
+          setWordSimulatorOpen(false);
+          setAddinModalOpen(true);
+        }}
       />
 
       {/* Document Loading & Processing Overlay */}

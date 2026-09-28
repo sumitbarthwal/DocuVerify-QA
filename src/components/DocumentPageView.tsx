@@ -456,10 +456,73 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
     }
   };
 
-  // Helper: insert markdown formatting into current document
+  // Helper: insert formatting or apply to active selection in authentic Word document or editor
+  const handleApplyFormat = (prefix: string, suffix: string = '', defaultText: string = 'text') => {
+    // If user has selected text in the authentic Word page canvas
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      if (prefix === '**') {
+        document.execCommand('bold');
+        return;
+      } else if (prefix === '*') {
+        document.execCommand('italic');
+        return;
+      } else if (prefix === '<u>') {
+        document.execCommand('underline');
+        return;
+      } else if (prefix === '~~') {
+        document.execCommand('strikeThrough');
+        return;
+      }
+    }
+
+    if (!editMode) {
+      setEditMode(true);
+    }
+    setTimeout(() => {
+      const textarea = inPageEditorRef.current;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = textarea.value;
+      const selected = val.slice(start, end);
+      const replacement = selected ? `${prefix}${selected}${suffix}` : `${prefix}${defaultText}${suffix}`;
+      const nextVal = val.slice(0, start) + replacement + val.slice(end);
+
+      setEditedText(nextVal);
+      onChange(nextVal);
+
+      setTimeout(() => {
+        textarea.focus();
+        const cursorStart = selected ? start : start + prefix.length;
+        const cursorEnd = selected ? start + replacement.length : cursorStart + defaultText.length;
+        textarea.setSelectionRange(cursorStart, cursorEnd);
+      }, 20);
+    }, 40);
+  };
+
+  const handleExecWordFormat = (cmd: string, val: string = '') => {
+    document.execCommand(cmd, false, val);
+  };
+
   const handleInsertSnippet = (snippet: string) => {
-    const updated = content + '\n\n' + snippet;
-    onChange(updated);
+    if (editMode && inPageEditorRef.current) {
+      const textarea = inPageEditorRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = textarea.value;
+      const nextVal = val.slice(0, start) + snippet + val.slice(end);
+      setEditedText(nextVal);
+      onChange(nextVal);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + snippet.length, start + snippet.length);
+      }, 20);
+    } else {
+      const updated = content + '\n\n' + snippet;
+      onChange(updated);
+    }
     showStatusNotice('Inserted element into Word document');
   };
 
@@ -800,28 +863,32 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                   {/* Bold, Italic, Underline, Strikethrough */}
                   <div className="flex items-center gap-0.5 ml-1">
                     <button 
-                      onClick={() => handleInsertSnippet('**Bold Text**')} 
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleApplyFormat('**', '**', 'Bold Text')} 
                       className="p-1 hover:bg-[#f3f2f1] active:bg-[#edebe9] rounded text-slate-700 font-bold text-xs w-6 h-6 flex items-center justify-center transition" 
                       title="Bold (Ctrl+B)"
                     >
                       <Bold className="w-3.5 h-3.5" />
                     </button>
                     <button 
-                      onClick={() => handleInsertSnippet('*Italic Text*')} 
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleApplyFormat('*', '*', 'Italic Text')} 
                       className="p-1 hover:bg-[#f3f2f1] active:bg-[#edebe9] rounded text-slate-700 italic text-xs w-6 h-6 flex items-center justify-center transition" 
                       title="Italic (Ctrl+I)"
                     >
                       <Italic className="w-3.5 h-3.5" />
                     </button>
                     <button 
-                      onClick={() => handleInsertSnippet('<u>Underlined Text</u>')} 
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleApplyFormat('<u>', '</u>', 'Underlined Text')} 
                       className="p-1 hover:bg-[#f3f2f1] active:bg-[#edebe9] rounded text-slate-700 text-xs w-6 h-6 flex items-center justify-center transition" 
                       title="Underline (Ctrl+U)"
                     >
                       <Underline className="w-3.5 h-3.5" />
                     </button>
                     <button 
-                      onClick={() => handleInsertSnippet('~~Strikethrough Text~~')} 
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleApplyFormat('~~', '~~', 'Strikethrough Text')} 
                       className="p-1 hover:bg-[#f3f2f1] active:bg-[#edebe9] rounded text-slate-700 text-xs w-6 h-6 flex items-center justify-center transition" 
                       title="Strikethrough"
                     >
@@ -833,14 +900,22 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                 {/* Paragraph Group */}
                 <div className="flex items-center gap-1 px-3">
                   <button 
-                    onClick={() => handleInsertSnippet('- Bullet Item 1\n- Bullet Item 2')} 
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      handleExecWordFormat('insertUnorderedList');
+                      handleInsertSnippet('- Bullet Item 1\n- Bullet Item 2');
+                    }} 
                     className="p-1 hover:bg-[#f3f2f1] rounded text-slate-700 w-6 h-6 flex items-center justify-center transition" 
                     title="Bullets"
                   >
                     <List className="w-3.5 h-3.5" />
                   </button>
                   <button 
-                    onClick={() => handleInsertSnippet('1. Numbered Item 1\n2. Numbered Item 2')} 
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      handleExecWordFormat('insertOrderedList');
+                      handleInsertSnippet('1. Numbered Item 1\n2. Numbered Item 2');
+                    }} 
                     className="p-1 hover:bg-[#f3f2f1] rounded text-slate-700 w-6 h-6 flex items-center justify-center transition" 
                     title="Numbering"
                   >
@@ -848,28 +923,44 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                   </button>
                   <div className="h-4 w-px bg-slate-200 mx-0.5" />
                   <button 
-                    onClick={() => showStatusNotice('Alignment: Left')}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      handleExecWordFormat('justifyLeft');
+                      showStatusNotice('Alignment: Left');
+                    }}
                     className="p-1 bg-blue-50 text-blue-700 rounded w-6 h-6 flex items-center justify-center transition" 
                     title="Align Left (Ctrl+L)"
                   >
                     <AlignLeft className="w-3.5 h-3.5" />
                   </button>
                   <button 
-                    onClick={() => showStatusNotice('Alignment: Center')}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      handleExecWordFormat('justifyCenter');
+                      showStatusNotice('Alignment: Center');
+                    }}
                     className="p-1 hover:bg-[#f3f2f1] rounded text-slate-700 w-6 h-6 flex items-center justify-center transition" 
                     title="Center (Ctrl+E)"
                   >
                     <AlignCenter className="w-3.5 h-3.5" />
                   </button>
                   <button 
-                    onClick={() => showStatusNotice('Alignment: Right')}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      handleExecWordFormat('justifyRight');
+                      showStatusNotice('Alignment: Right');
+                    }}
                     className="p-1 hover:bg-[#f3f2f1] rounded text-slate-700 w-6 h-6 flex items-center justify-center transition" 
                     title="Align Right (Ctrl+R)"
                   >
                     <AlignRight className="w-3.5 h-3.5" />
                   </button>
                   <button 
-                    onClick={() => showStatusNotice('Alignment: Justify')}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      handleExecWordFormat('justifyFull');
+                      showStatusNotice('Alignment: Justify');
+                    }}
                     className="p-1 hover:bg-[#f3f2f1] rounded text-slate-700 w-6 h-6 flex items-center justify-center transition" 
                     title="Justify (Ctrl+J)"
                   >
@@ -1260,7 +1351,7 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
       {/* ========================================================================= */}
       {/* 3. AUTHENTIC MICROSOFT WORD DUAL RULER                                    */}
       {/* ========================================================================= */}
-      {showRuler && viewMode !== 'raw-openxml' && (
+      {showRuler && (
         <div 
           ref={rulerScrollRef}
           className="w-full bg-[#f3f2f1] border-b border-[#d2d0ce] overflow-x-hidden select-none shrink-0 z-10 py-0.5"
@@ -1349,11 +1440,12 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
               style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: `${paperDimensions.width}px` }}
               className="transition-transform duration-150 flex flex-col items-center"
             >
-          {/* VIEW: RAW OPENXML VIEWER (IF BINARY DOCX) */}
-          {viewMode === 'raw-openxml' && docxBuffer ? (
+          {/* VIEW: AUTHENTIC MICROSOFT WORD OPENXML ENGINE (PRIMARY WHEN DOCX BUFFER IS PRESENT) */}
+          {docxBuffer && viewMode !== 'read-mode' && viewMode !== 'web-layout' ? (
             <div className="w-full flex flex-col items-center">
               <WordDocumentViewer
                 docxBuffer={docxBuffer}
+                onDocxBufferChange={onDocxBufferChange}
                 issues={issues}
                 selectedIssueId={selectedIssueId}
                 onSelectIssue={(issue, rect) => {
@@ -1365,6 +1457,14 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                 onPageChange={(curr, total) => {
                   setCurrentPage(curr);
                 }}
+                onContentChange={(newText) => {
+                  onChange(newText);
+                }}
+                onOpenHeaderFooterModal={onOpenHeaderFooterModal}
+                onApplyFix={handleApplyFixInternal}
+                headerText={headerText}
+                footerText={footerText}
+                isEditable={true}
               />
             </div>
           ) : viewMode === 'read-mode' ? (
@@ -1570,7 +1670,11 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                       {/* Running Header inside Top Margin Zone */}
                       <div 
                         style={{ top: '24px', left: `${marginPadding.left}px`, right: `${marginPadding.right}px` }}
-                        className="absolute flex items-center justify-between text-[11px] text-[#64748b] select-none border-b border-[#cbd5e1] pb-1.5"
+                        onClick={() => {
+                          if (onOpenHeaderFooterModal) onOpenHeaderFooterModal();
+                        }}
+                        className="absolute flex items-center justify-between text-[11px] text-[#64748b] select-none border-b border-[#cbd5e1] pb-1.5 cursor-pointer hover:bg-blue-50/60 transition rounded px-1 group/hdr"
+                        title="Click to edit Running Header"
                       >
                         <div className="flex items-center gap-2 truncate max-w-[75%]">
                           <span className="font-bold text-[#1f3864] tracking-tight truncate">{effectiveHeader}</span>
@@ -1582,10 +1686,11 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                                 e.stopPropagation();
                                 onOpenHeaderFooterModal();
                               }}
-                              className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 underline transition"
+                              className="text-[10px] text-blue-600 hover:text-blue-800 underline font-semibold transition flex items-center gap-1 bg-white/80 px-1.5 py-0.5 rounded border border-blue-200"
                               title="Edit Running Header"
                             >
-                              Edit Header
+                              <Edit3 className="w-2.5 h-2.5" />
+                              <span>Edit Header</span>
                             </button>
                           )}
                           <span className="font-medium text-[10px] text-slate-400">Header -Section 1-</span>
@@ -1597,20 +1702,52 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                         {editMode && currentPage === page.pageNumber ? (
                           /* Direct In-Place Word Page Editor */
                           <div className="h-full flex flex-col">
-                            <div className="mb-2 p-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 flex items-center justify-between">
-                              <span className="font-medium">Direct In-Page Word Editor active for Page {page.pageNumber}</span>
-                              <button
-                                onClick={handleCommitEdit}
-                                className="px-2 py-0.5 bg-[#185abd] text-white rounded font-bold text-[11px]"
-                              >
-                                Save Revisions
-                              </button>
+                            <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center justify-between flex-wrap gap-2 shadow-2xs">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                                <span className="font-semibold">In-Page Word Editor (Page {page.pageNumber})</span>
+                                <span className="text-[11px] text-blue-700 hidden sm:inline">• Ctrl+B Bold, Ctrl+I Italic, Ctrl+U Underline</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded font-medium text-xs transition"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleCommitEdit}
+                                  className="px-3 py-1 bg-[#185abd] hover:bg-[#104a7b] text-white rounded font-bold text-xs flex items-center gap-1 transition shadow-xs"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Save Revisions</span>
+                                </button>
+                              </div>
                             </div>
                             <textarea
                               ref={inPageEditorRef}
                               value={editedText}
                               onChange={(e) => setEditedText(e.target.value)}
-                              className="w-full flex-1 p-3 border border-blue-300 rounded font-['Calibri',sans-serif] text-slate-800 text-[14.6px] leading-relaxed outline-hidden focus:ring-2 focus:ring-blue-500 resize-none min-h-[600px]"
+                              onKeyDown={(e) => {
+                                if (e.ctrlKey || e.metaKey) {
+                                  if (e.key === 'b' || e.key === 'B') {
+                                    e.preventDefault();
+                                    handleApplyFormat('**', '**', 'Bold Text');
+                                  } else if (e.key === 'i' || e.key === 'I') {
+                                    e.preventDefault();
+                                    handleApplyFormat('*', '*', 'Italic Text');
+                                  } else if (e.key === 'u' || e.key === 'U') {
+                                    e.preventDefault();
+                                    handleApplyFormat('<u>', '</u>', 'Underlined Text');
+                                  } else if (e.key === 's' || e.key === 'S') {
+                                    e.preventDefault();
+                                    handleCommitEdit();
+                                  }
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEdit();
+                                }
+                              }}
+                              className="w-full flex-1 p-4 border border-blue-300 rounded-lg font-['Calibri',sans-serif] text-slate-800 text-[14.6px] leading-relaxed outline-hidden focus:ring-2 focus:ring-blue-500 resize-none min-h-[600px] bg-white selection:bg-blue-100 shadow-inner"
                               spellCheck={false}
                             />
                           </div>
@@ -1635,7 +1772,11 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                       {/* Running Footer inside Bottom Margin Zone */}
                       <div 
                         style={{ bottom: '24px', left: `${marginPadding.left}px`, right: `${marginPadding.right}px` }}
-                        className="absolute flex items-center justify-between text-[11px] text-[#64748b] select-none border-t border-[#cbd5e1] pt-1.5"
+                        onClick={() => {
+                          if (onOpenHeaderFooterModal) onOpenHeaderFooterModal();
+                        }}
+                        className="absolute flex items-center justify-between text-[11px] text-[#64748b] select-none border-t border-[#cbd5e1] pt-1.5 cursor-pointer hover:bg-blue-50/60 transition rounded px-1 group/ftr"
+                        title="Click to edit Running Footer"
                       >
                         <div className="truncate max-w-[70%]">
                           <span className="font-medium text-slate-600 truncate">{effectiveFooter}</span>
@@ -1647,10 +1788,11 @@ export const DocumentPageView: React.FC<DocumentPageViewProps> = ({
                                 e.stopPropagation();
                                 onOpenHeaderFooterModal();
                               }}
-                              className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 underline transition"
+                              className="text-[10px] text-blue-600 hover:text-blue-800 underline font-semibold transition flex items-center gap-1 bg-white/80 px-1.5 py-0.5 rounded border border-blue-200"
                               title="Edit Running Footer"
                             >
-                              Edit Footer
+                              <Edit3 className="w-2.5 h-2.5" />
+                              <span>Edit Footer</span>
                             </button>
                           )}
                           <span className="font-mono font-bold text-[#1f3864]">
@@ -1987,7 +2129,7 @@ function RenderDocumentPageStructure({
               <tr className="bg-[#f1f5f9] text-[#0f172a] border-b-2 border-[#185abd]">
                 {tableRows[0].replace(/^\|/, '').replace(/\|$/, '').split('|').map((col, cIdx) => (
                   <th key={`th-${cIdx}`} className="border border-[#cbd5e1] p-2 text-left font-bold text-xs uppercase tracking-wider text-slate-800">
-                    {col.trim()}
+                    <WordFormattedInline text={col.trim()} />
                   </th>
                 ))}
               </tr>
@@ -2004,7 +2146,7 @@ function RenderDocumentPageStructure({
                           key={`td-${cIdx}`} 
                           className={`border border-[#cbd5e1] p-2 text-slate-800 ${isNumeric ? 'text-right font-mono font-medium' : 'text-left'}`}
                         >
-                          {cell}
+                          <WordFormattedInline text={cell} />
                         </td>
                       );
                     })}
@@ -2250,13 +2392,13 @@ function RenderTextWithWordTags({
   return <span>{segments}</span>;
 }
 
-// Inline renderer supporting markdown bold (**text**) and italic (*text*) inside Word paragraphs
+// Inline renderer supporting markdown bold (**text**), italic (*text*), underline (<u>text</u> or __text__), strikethrough (~~text~~), highlight (<mark>text</mark>), code (`text`), sub, and sup
 const WordFormattedInline: React.FC<{ text: string }> = ({ text }) => {
   if (!text) return null;
 
-  // Simple token parser for **bold** and *italic*
   const parts: React.ReactNode[] = [];
-  const regex = /(\*\*.*?\*\*|\*.*?\*|__.*?__|_.*?_)/g;
+  // Tokenize all supported inline formats
+  const regex = /(\*\*\*[\s\S]+?\*\*\*|\*\*[\s\S]+?\*\*|__[\s\S]+?__|<u>[\s\S]+?<\/u>|~~[\s\S]+?~~|<del>[\s\S]+?<\/del>|<s>[\s\S]+?<\/s>|<mark>[\s\S]+?<\/mark>|==[\s\S]+?==|`[^`]+?`|<code>[\s\S]+?<\/code>|<sub>[\s\S]+?<\/sub>|<sup>[\s\S]+?<\/sup>|\*[^*]+?\*)/g;
   let lastIndex = 0;
   let match;
 
@@ -2265,13 +2407,56 @@ const WordFormattedInline: React.FC<{ text: string }> = ({ text }) => {
       parts.push(text.slice(lastIndex, match.index));
     }
     const token = match[0];
-    if (token.startsWith('**') && token.endsWith('**')) {
-      parts.push(<strong key={match.index}>{token.slice(2, -2)}</strong>);
-    } else if (token.startsWith('*') && token.endsWith('*')) {
-      parts.push(<em key={match.index}>{token.slice(1, -1)}</em>);
+    const key = match.index;
+
+    // 1. Bold & Italic (***text***)
+    if (token.startsWith('***') && token.endsWith('***') && token.length >= 6) {
+      parts.push(<strong key={key} className="font-bold text-[#0f172a]"><em className="italic">{token.slice(3, -3)}</em></strong>);
+    }
+    // 2. Bold (**text**)
+    else if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
+      parts.push(<strong key={key} className="font-bold text-[#0f172a]">{token.slice(2, -2)}</strong>);
+    }
+    // 3. Underline (<u>text</u> or __text__)
+    else if ((token.startsWith('<u>') && token.endsWith('</u>') && token.length >= 7) ||
+             (token.startsWith('__') && token.endsWith('__') && token.length >= 4)) {
+      const inner = token.startsWith('<u>') ? token.slice(3, -4) : token.slice(2, -2);
+      parts.push(<u key={key} className="underline decoration-slate-700 decoration-1 underline-offset-2">{inner}</u>);
+    }
+    // 4. Strikethrough (~~text~~ or <del>text</del> or <s>text</s>)
+    else if ((token.startsWith('~~') && token.endsWith('~~') && token.length >= 4) ||
+             (token.startsWith('<del>') && token.endsWith('</del>') && token.length >= 11) ||
+             (token.startsWith('<s>') && token.endsWith('</s>') && token.length >= 7)) {
+      const inner = token.startsWith('~~') ? token.slice(2, -2) : token.startsWith('<del>') ? token.slice(5, -6) : token.slice(3, -4);
+      parts.push(<del key={key} className="line-through text-slate-500">{inner}</del>);
+    }
+    // 5. Highlight (<mark>text</mark> or ==text==)
+    else if ((token.startsWith('<mark>') && token.endsWith('</mark>') && token.length >= 13) ||
+             (token.startsWith('==') && token.endsWith('==') && token.length >= 4)) {
+      const inner = token.startsWith('<mark>') ? token.slice(6, -7) : token.slice(2, -2);
+      parts.push(<mark key={key} className="bg-amber-200/90 text-amber-950 px-1 py-0.5 rounded-2xs font-medium">{inner}</mark>);
+    }
+    // 6. Inline Code (`code` or <code>code</code>)
+    else if ((token.startsWith('`') && token.endsWith('`') && token.length >= 2) ||
+             (token.startsWith('<code>') && token.endsWith('</code>') && token.length >= 13)) {
+      const inner = token.startsWith('`') ? token.slice(1, -1) : token.slice(6, -7);
+      parts.push(<code key={key} className="font-mono text-[12.5px] bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">{inner}</code>);
+    }
+    // 7. Subscript (<sub>text</sub>)
+    else if (token.startsWith('<sub>') && token.endsWith('</sub>') && token.length >= 11) {
+      parts.push(<sub key={key} className="text-[10px] text-slate-700">{token.slice(5, -6)}</sub>);
+    }
+    // 8. Superscript (<sup>text</sup>)
+    else if (token.startsWith('<sup>') && token.endsWith('</sup>') && token.length >= 11) {
+      parts.push(<sup key={key} className="text-[10px] text-slate-700">{token.slice(5, -6)}</sup>);
+    }
+    // 9. Italic (*text*)
+    else if (token.startsWith('*') && token.endsWith('*') && token.length >= 2) {
+      parts.push(<em key={key} className="italic text-slate-700">{token.slice(1, -1)}</em>);
     } else {
       parts.push(token);
     }
+
     lastIndex = regex.lastIndex;
   }
 

@@ -32,6 +32,8 @@ export const saveRecentWorkedFile = (
     issuesCount?: number;
     resolvedCount?: number;
     format?: string;
+    headerText?: string;
+    footerText?: string;
   }
 ): RecentFileRecord[] => {
   try {
@@ -55,6 +57,8 @@ export const saveRecentWorkedFile = (
       resolvedCount: file.resolvedCount ?? 0,
       summaryTitle,
       format: file.format || file.filename.split('.').pop()?.toUpperCase() || 'DOCX',
+      headerText: file.headerText,
+      footerText: file.footerText,
     };
 
     // Filter out existing record with same id or filename to avoid duplicates

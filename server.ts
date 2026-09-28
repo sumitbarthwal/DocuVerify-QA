@@ -120,6 +120,177 @@ async function startServer() {
     });
   });
 
+  // -------------------------------------------------------------
+  // NATIVE EDITOR ADD-IN & MANIFEST ENDPOINTS
+  // Microsoft Word / Excel Office.js, Adobe Acrobat & Google Docs
+  // -------------------------------------------------------------
+  const getManifestXml = (hostUrl: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp 
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" 
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" 
+  xsi:type="TaskPaneApp">
+  <Id>e4d891c1-8ebb-465d-b3a6-66c7655f755f</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>DocuVerify QA Systems</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="DocuVerify QA Assistant" />
+  <Description DefaultValue="Professional document auditing, continuous data integrity, and compliance proofing directly inside Microsoft Word and Excel." />
+  <IconUrl DefaultValue="${hostUrl}/favicon.ico" />
+  <HighResolutionIconUrl DefaultValue="${hostUrl}/favicon.ico" />
+  <SupportUrl DefaultValue="${hostUrl}" />
+  <AppDomains>
+    <AppDomain>${hostUrl}</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Document" />
+    <Host Name="Workbook" />
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="${hostUrl}/?mode=taskpane" />
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <CustomTab id="DocuVerifyTab">
+              <Group id="DocuVerifyGroup">
+                <Label resid="GroupLabel" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon16" />
+                  <bt:Image size="32" resid="Icon32" />
+                  <bt:Image size="80" resid="Icon80" />
+                </Icon>
+                <Control xsi:type="Button" id="ShowTaskpaneButton">
+                  <Label resid="ButtonLabel" />
+                  <Supertip>
+                    <Title resid="ButtonTitle" />
+                    <Description resid="ButtonDesc" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon16" />
+                    <bt:Image size="32" resid="Icon32" />
+                    <bt:Image size="80" resid="Icon80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>DocuVerifyTaskpane</TaskpaneId>
+                    <SourceLocation resid="TaskpaneUrl" />
+                  </Action>
+                </Control>
+              </Group>
+              <Label resid="TabLabel" />
+            </CustomTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon16" DefaultValue="${hostUrl}/favicon.ico" />
+        <bt:Image id="Icon32" DefaultValue="${hostUrl}/favicon.ico" />
+        <bt:Image id="Icon80" DefaultValue="${hostUrl}/favicon.ico" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="TaskpaneUrl" DefaultValue="${hostUrl}/?mode=taskpane" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="Quality Assurance" />
+        <bt:String id="TabLabel" DefaultValue="DocuVerify QA" />
+        <bt:String id="ButtonLabel" DefaultValue="DocuVerify Assistant" />
+        <bt:String id="ButtonTitle" DefaultValue="DocuVerify Document QA" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="ButtonDesc" DefaultValue="Inspect document for calculation continuity, repetitive data discrepancies, grammar, and typography with 1-click in-place fixing directly inside Word." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>`;
+
+  // Direct Office Add-in manifest route
+  app.get(['/manifest.xml', '/office-manifest.xml'], (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host');
+    const hostUrl = `${proto}://${host}`;
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(getManifestXml(hostUrl));
+  });
+
+  // Downloadable manifest file
+  app.get('/api/addin/manifest.xml', (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host');
+    const hostUrl = `${proto}://${host}`;
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="DocuVerify_Word_Manifest.xml"');
+    res.send(getManifestXml(hostUrl));
+  });
+
+  // Downloadable Adobe Acrobat Pro Action Script
+  app.get('/api/addin/acrobat-action.js', (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host');
+    const hostUrl = `${proto}://${host}`;
+    const script = `/* DocuVerify QA - Adobe Acrobat Pro Automation Script */
+app.addMenuItem({
+  cName: "DocuVerifyQA",
+  cUser: "DocuVerify QA Audit...",
+  cParent: "Tools",
+  cExec: "runDocuVerifyAudit();",
+  cEnable: "event.rc = (event.target != null);",
+  nPos: 0
+});
+function runDocuVerifyAudit() {
+  if (!this.numPages) {
+    app.alert("No PDF document open.", 3);
+    return;
+  }
+  app.beginPriv();
+  var fullText = "";
+  for (var i = 0; i < Math.min(this.numPages, 100); i++) {
+    var words = this.getPageNumWords(i);
+    for (var w = 0; w < words; w++) fullText += this.getPageNthWord(i, w, false) + " ";
+  }
+  var issues = 0;
+  var rep = "DocuVerify PDF Preflight QA for: " + this.documentFileName + "\\n\\n";
+  if (/\\[(TBD|TODO|PENDING|INSERT|DRAFT)\\]/i.test(fullText)) {
+    issues++;
+    rep += "[CRITICAL] Unresolved draft placeholders found.\\n";
+  }
+  rep += "\\nPages: " + this.numPages + " | Title: " + (this.info.title || "None");
+  rep += "\\n\\nOpen full interactive studio at: ${hostUrl}";
+  app.alert(rep, issues === 0 ? 3 : 1);
+  app.endPriv();
+}`;
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="DocuVerify_Acrobat_QA.js"');
+    res.send(script);
+  });
+
+  // Downloadable Google Docs Apps Script
+  app.get('/api/addin/google-docs.gs', (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host');
+    const hostUrl = `${proto}://${host}`;
+    const script = `function onOpen() {
+  DocumentApp.getUi()
+    .createMenu('DocuVerify QA')
+    .addItem('Open QA Taskpane', 'showSidebar')
+    .addToUi();
+}
+function showSidebar() {
+  var html = HtmlService.createHtmlOutput(
+    '<iframe src="${hostUrl}/?mode=taskpane" style="width:100%;height:100%;border:none;"></iframe>'
+  ).setTitle('DocuVerify QA Assistant').setWidth(360);
+  DocumentApp.getUi().showSidebar(html);
+}`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="DocuVerify_GoogleDocs.gs"');
+    res.send(script);
+  });
+
   // POST /api/ai/audit - Extended Online AI QA Audit
   app.post('/api/ai/audit', async (req, res) => {
     try {

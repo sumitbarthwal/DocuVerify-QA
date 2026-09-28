@@ -18,7 +18,8 @@ import {
   BookOpen,
   ChevronRight,
   ExternalLink,
-  Info
+  Info,
+  Zap
 } from 'lucide-react';
 import { ReportStats, QAIssue } from '../types';
 import { 
@@ -45,6 +46,7 @@ export interface ExportPreviewModalProps {
   footerText?: string;
   docxBuffer?: ArrayBuffer | null;
   onShowToast: (msg: string) => void;
+  onOpenAddinModal?: () => void;
 }
 
 export type ExportFormatTab = 'word' | 'pdf' | 'certificate' | 'markdown' | 'csv' | 'json';
@@ -60,6 +62,7 @@ export const ExportPreviewModal: React.FC<ExportPreviewModalProps> = ({
   footerText,
   docxBuffer,
   onShowToast,
+  onOpenAddinModal,
 }) => {
   const [activeTab, setActiveTab] = useState<ExportFormatTab>('word');
   const [paperSize, setPaperSize] = useState<'a4' | 'letter'>('a4');
@@ -193,6 +196,28 @@ export const ExportPreviewModal: React.FC<ExportPreviewModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Native Office Add-in Banner */}
+        {onOpenAddinModal && (
+          <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-b border-blue-200/80 px-6 py-2 flex items-center justify-between gap-3 text-xs text-blue-950">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                <strong>100% Native Word Fidelity:</strong> Want to bypass web conversions completely? Run DocuVerify directly inside Microsoft Word as a native Taskpane Add-in.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                onClose();
+                onOpenAddinModal();
+              }}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shrink-0 transition shadow-xs text-xs cursor-pointer flex items-center gap-1.5"
+            >
+              <Zap className="w-3 h-3" />
+              <span>Word Add-in &amp; Simulator</span>
+            </button>
+          </div>
+        )}
 
         {/* Modal Controls Bar: Tab Selector & Customization */}
         <div className="px-6 py-3 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 text-xs">

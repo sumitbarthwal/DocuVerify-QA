@@ -21,7 +21,8 @@ import {
   FileSpreadsheet,
   FileJson,
   Sparkles,
-  Loader2
+  Loader2,
+  Zap
 } from 'lucide-react';
 import { ReportStats, SampleReport, RecentFileRecord } from '../types';
 import { SAMPLE_REPORTS } from '../services/sampleReports';
@@ -66,6 +67,8 @@ interface NavbarProps {
   isAiScanning?: boolean;
   aiAvailable?: boolean;
   onOpenExportPreview?: () => void;
+  // Native Editor Add-ins
+  onOpenAddinModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -104,6 +107,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isAiScanning = false,
   aiAvailable = true,
   onOpenExportPreview,
+  onOpenAddinModal,
 }) => {
   const [exportOpen, setExportOpen] = useState(false);
   const [samplesOpen, setSamplesOpen] = useState(false);
@@ -273,6 +277,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {stats.continuity.conflictingMetricsFound}
                 </span>
               )}
+            </button>
+          )}
+
+          {/* Native Editor Add-in Suite (Microsoft Word, Excel, Acrobat) */}
+          {onOpenAddinModal && (
+            <button
+              id="btn-native-addin-hub"
+              onClick={onOpenAddinModal}
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-900 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Install DocuVerify directly inside native Microsoft Word, Excel, or Adobe Acrobat Pro"
+            >
+              <Zap className="w-3.5 h-3.5 text-blue-600" />
+              <span>Word &amp; Acrobat Add-in</span>
             </button>
           )}
 
@@ -512,6 +529,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <div>
                         <span className="text-xs font-bold text-blue-900 block">Export &amp; Print Preview</span>
                         <span className="text-[10px] text-blue-600 block">Preview Word, PDF, Certificate &amp; Tables</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Native Word & Acrobat Add-in Option */}
+                {onOpenAddinModal && (
+                  <div className="px-2 py-1 border-b border-slate-100 mb-1">
+                    <button
+                      id="btn-export-native-addin"
+                      onClick={() => {
+                        setExportOpen(false);
+                        onOpenAddinModal();
+                      }}
+                      className="w-full text-left p-2 bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 text-indigo-900 rounded-lg flex items-center gap-2 font-semibold transition border border-indigo-200 cursor-pointer"
+                    >
+                      <Zap className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold text-indigo-950 block">Native Word / Acrobat Add-in</span>
+                        <span className="text-[10px] text-indigo-600 block">Zero formatting loss &bull; Real MS Word Taskpane</span>
                       </div>
                     </button>
                   </div>

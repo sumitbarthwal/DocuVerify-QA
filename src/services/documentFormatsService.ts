@@ -24,6 +24,44 @@ export interface ImportResult {
   rawDocxBuffer?: ArrayBuffer;
 }
 
+// Helper to extract clean text from Word OpenXML (<w:t> tags) handling namespaces and attributes
+function extractTextFromOpenXmlString(xml: string): string {
+  if (!xml) return '';
+  const parts: string[] = [];
+  // Match all <w:t ...>text</w:t> or <w:t>text</w:t>
+  const tRegex = /<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/gi;
+  let match;
+  while ((match = tRegex.exec(xml)) !== null) {
+    if (match[1] !== undefined) {
+      const decoded = match[1]
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'");
+      parts.push(decoded);
+    }
+  }
+
+  if (parts.length > 0) {
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  // Fallback to DOMParser with namespace wildcard
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'application/xml');
+    const nodes = doc.getElementsByTagNameNS('*', 't');
+    const textArr: string[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i].textContent) textArr.push(nodes[i].textContent!);
+    }
+    return textArr.join(' ').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
 // Extract original Running Headers, Footers, and embedded media from docx zip package
 export async function extractDocxMetadata(arrayBuffer: ArrayBuffer): Promise<{
   headerText: string;
@@ -39,28 +77,30 @@ export async function extractDocxMetadata(arrayBuffer: ArrayBuffer): Promise<{
 
     // Extract headers (header1.xml, header2.xml, etc.)
     const headerFiles = Object.keys(zip.files).filter(k => /^word\/header\d*\.xml$/i.test(k)).sort();
+    const headerSegments: string[] = [];
     for (const hf of headerFiles) {
       const xml = await zip.files[hf].async('text');
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(xml, 'application/xml');
-      const textNodes = Array.from(doc.getElementsByTagName('w:t'));
-      const text = textNodes.map(n => n.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
-      if (text && !headerText) {
-        headerText = text;
+      const text = extractTextFromOpenXmlString(xml);
+      if (text && !headerSegments.includes(text)) {
+        headerSegments.push(text);
       }
+    }
+    if (headerSegments.length > 0) {
+      headerText = headerSegments.join(' | ');
     }
 
     // Extract footers (footer1.xml, footer2.xml, etc.)
     const footerFiles = Object.keys(zip.files).filter(k => /^word\/footer\d*\.xml$/i.test(k)).sort();
+    const footerSegments: string[] = [];
     for (const ff of footerFiles) {
       const xml = await zip.files[ff].async('text');
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(xml, 'application/xml');
-      const textNodes = Array.from(doc.getElementsByTagName('w:t'));
-      const text = textNodes.map(n => n.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
-      if (text && !footerText) {
-        footerText = text;
+      const text = extractTextFromOpenXmlString(xml);
+      if (text && !footerSegments.includes(text)) {
+        footerSegments.push(text);
       }
+    }
+    if (footerSegments.length > 0) {
+      footerText = footerSegments.join(' | ');
     }
 
     // Extract embedded media images (word/media/*) using lightweight Blob URLs
@@ -85,16 +125,14 @@ export async function extractDocxMetadata(arrayBuffer: ArrayBuffer): Promise<{
   return { headerText, footerText, images };
 }
 
-// Convert HTML (from mammoth or .html files) to clean structured markdown with images
+// Convert HTML (from mammoth or .html files) to clean structured markdown with images and full formatting
 export function htmlToMarkdown(html: string): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-  const result: string[] = [];
 
   function processNode(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent || '';
-      return text;
+      return node.textContent || '';
     }
 
     if (node.nodeType !== Node.ELEMENT_NODE) return '';
@@ -104,15 +142,15 @@ export function htmlToMarkdown(html: string): string {
 
     switch (tag) {
       case 'h1':
-        return `\n\n# ${el.textContent?.trim()}\n\n`;
+        return `\n\n# ${Array.from(el.childNodes).map(processNode).join('').trim()}\n\n`;
       case 'h2':
-        return `\n\n## ${el.textContent?.trim()}\n\n`;
+        return `\n\n## ${Array.from(el.childNodes).map(processNode).join('').trim()}\n\n`;
       case 'h3':
-        return `\n\n### ${el.textContent?.trim()}\n\n`;
+        return `\n\n### ${Array.from(el.childNodes).map(processNode).join('').trim()}\n\n`;
       case 'h4':
       case 'h5':
       case 'h6':
-        return `\n\n#### ${el.textContent?.trim()}\n\n`;
+        return `\n\n#### ${Array.from(el.childNodes).map(processNode).join('').trim()}\n\n`;
       case 'img': {
         const src = el.getAttribute('src') || '';
         const alt = el.getAttribute('alt') || el.getAttribute('title') || 'Document Photo Plate';
@@ -132,6 +170,11 @@ export function htmlToMarkdown(html: string): string {
       case 'p': {
         const text = Array.from(el.childNodes).map(processNode).join('').trim();
         return text ? `\n\n${text}\n\n` : '\n';
+      }
+      case 'blockquote': {
+        const text = Array.from(el.childNodes).map(processNode).join('').trim();
+        const bqLines = text.split('\n');
+        return '\n\n' + bqLines.map(l => `> ${l}`).join('\n') + '\n\n';
       }
       case 'ul': {
         const items = Array.from(el.querySelectorAll(':scope > li'))
@@ -154,7 +197,7 @@ export function htmlToMarkdown(html: string): string {
 
         rows.forEach((tr, rIdx) => {
           const cells = Array.from(tr.querySelectorAll('th, td')).map(cell => 
-            (cell.textContent || '').trim().replace(/\r?\n+/g, ' <br /> ').replace(/\|/g, '\\|')
+            Array.from(cell.childNodes).map(processNode).join('').trim().replace(/\r?\n+/g, ' <br /> ').replace(/\|/g, '\\|')
           );
           if (rIdx === 0) {
             headerColsCount = Math.max(cells.length, 1);
@@ -171,11 +214,55 @@ export function htmlToMarkdown(html: string): string {
       case 'hr':
         return '\n\n---\n\n';
       case 'strong':
-      case 'b':
-        return `**${el.textContent?.trim()}**`;
+      case 'b': {
+        const inner = Array.from(el.childNodes).map(processNode).join('');
+        if (!inner) return '';
+        const leading = inner.match(/^\s*/)?.[0] || '';
+        const trailing = inner.match(/\s*$/)?.[0] || '';
+        const trimmed = inner.trim();
+        return trimmed ? `${leading}**${trimmed}**${trailing}` : inner;
+      }
       case 'em':
-      case 'i':
-        return `*${el.textContent?.trim()}*`;
+      case 'i': {
+        const inner = Array.from(el.childNodes).map(processNode).join('');
+        if (!inner) return '';
+        const leading = inner.match(/^\s*/)?.[0] || '';
+        const trailing = inner.match(/\s*$/)?.[0] || '';
+        const trimmed = inner.trim();
+        return trimmed ? `${leading}*${trimmed}*${trailing}` : inner;
+      }
+      case 'u':
+      case 'ins': {
+        const inner = Array.from(el.childNodes).map(processNode).join('');
+        if (!inner) return '';
+        const leading = inner.match(/^\s*/)?.[0] || '';
+        const trailing = inner.match(/\s*$/)?.[0] || '';
+        const trimmed = inner.trim();
+        return trimmed ? `${leading}<u>${trimmed}</u>${trailing}` : inner;
+      }
+      case 's':
+      case 'del':
+      case 'strike': {
+        const inner = Array.from(el.childNodes).map(processNode).join('');
+        if (!inner) return '';
+        const leading = inner.match(/^\s*/)?.[0] || '';
+        const trailing = inner.match(/\s*$/)?.[0] || '';
+        const trimmed = inner.trim();
+        return trimmed ? `${leading}~~${trimmed}~~${trailing}` : inner;
+      }
+      case 'mark': {
+        const inner = Array.from(el.childNodes).map(processNode).join('');
+        const trimmed = inner.trim();
+        return trimmed ? `<mark>${trimmed}</mark>` : inner;
+      }
+      case 'code': {
+        const text = el.textContent || '';
+        return text ? `\`${text}\`` : '';
+      }
+      case 'sub':
+        return `<sub>${el.textContent || ''}</sub>`;
+      case 'sup':
+        return `<sup>${el.textContent || ''}</sup>`;
       case 'br':
         return '\n';
       default:
@@ -410,9 +497,25 @@ export async function parseImportedDocument(
       onProgress?.('Converting Word structure, tables, and styles...', 55);
       await new Promise(r => setTimeout(r, 10));
 
-      // Configure Mammoth to convert embedded images into lightweight Blob URLs
-      // This prevents multi-megabyte base64 strings from locking up regex scanners and React rendering
+      // Configure Mammoth to convert embedded images into lightweight Blob URLs and preserve text styling (underline, strikethrough, headings)
       const mammothOptions = {
+        styleMap: [
+          "u => u",
+          "strike => del",
+          "s => del",
+          "b => strong",
+          "i => em",
+          "p[style-name='Heading 1'] => h1:fresh",
+          "p[style-name='Heading 2'] => h2:fresh",
+          "p[style-name='Heading 3'] => h3:fresh",
+          "p[style-name='Heading 4'] => h4:fresh",
+          "p[style-name='Title'] => h1:fresh",
+          "p[style-name='Subtitle'] => h2:fresh",
+          "p[style-name='Quote'] => blockquote:fresh",
+          "p[style-name='Intense Quote'] => blockquote:fresh",
+          "r[style-name='Strong'] => strong",
+          "r[style-name='Emphasis'] => em",
+        ],
         convertImage: mammoth.images.imgElement((image: any) => {
           return image.read("base64").then((imageBuffer: string) => {
             try {
@@ -444,18 +547,6 @@ export async function parseImportedDocument(
       } catch {
         const rawResult = await mammoth.extractRawText({ arrayBuffer });
         content = rawResult.value || '';
-      }
-
-      // If there were media images in the docx that weren't referenced in the converted HTML body,
-      // append them as authentic document photo plates at the bottom using lightweight blob URLs
-      if (images.length > 0) {
-        const unreferenced = images.filter(img => !content.includes(img.dataUrl.slice(0, 40)));
-        if (unreferenced.length > 0) {
-          const photoPlates = unreferenced.map((img, idx) => 
-            `![Photo Plate ${idx + 1}: ${img.name}](${img.dataUrl})\n*Photo Plate ${idx + 1}: ${img.name} (Extracted from Original Document)*`
-          ).join('\n\n');
-          content = `${content.trim()}\n\n## Document Evidence & Photo Plates\n\n${photoPlates}\n`;
-        }
       }
 
       format = 'DOCX';
@@ -657,9 +748,15 @@ export async function exportToWordDocument(
   filename: string, 
   customHeader?: string, 
   customFooter?: string,
-  _existingDocxBuffer?: ArrayBuffer | null
+  existingDocxBuffer?: ArrayBuffer | null
 ) {
   const baseName = filename.replace(/\.[^/.]+$/, '');
+
+  // If we already have the original authentic DOCX array buffer, export that directly!
+  if (existingDocxBuffer && existingDocxBuffer.byteLength > 0) {
+    downloadDocxFile(existingDocxBuffer, `${sanitizeFilename(baseName)}_Verified.docx`);
+    return;
+  }
 
   const titleMatch = content.match(/^#\s+([^\n\r]+)/m);
   const docTitle = titleMatch ? titleMatch[1].trim() : 'Survey & Assessment Report';
@@ -730,9 +827,6 @@ export function exportToPDF(content: string, filename: string, customHeader?: st
   const effectiveHeader = (customHeader && customHeader.trim()) ? customHeader.trim() : defaultHeader;
   const effectiveFooter = (customFooter && customFooter.trim()) ? customFooter.trim() : defaultFooter;
 
-  const printWindow = window.open('', '_blank', 'width=900,height=1000');
-  if (!printWindow) return;
-
   const html = `
     <!DOCTYPE html>
     <html>
@@ -742,27 +836,7 @@ export function exportToPDF(content: string, filename: string, customHeader?: st
       <style>
         @page {
           size: letter portrait;
-          margin: 20mm 15mm 20mm 15mm;
-          @top-left {
-            content: "${escapeXml(effectiveHeader)}";
-            font-size: 8pt;
-            color: #64748b;
-          }
-          @top-right {
-            content: "Standard Document View";
-            font-size: 8pt;
-            color: #64748b;
-          }
-          @bottom-left {
-            content: "${escapeXml(effectiveFooter)}";
-            font-size: 8pt;
-            color: #64748b;
-          }
-          @bottom-right {
-            content: "Page " counter(page) " of " counter(pages);
-            font-size: 8pt;
-            color: #64748b;
-          }
+          margin: 18mm 15mm 18mm 15mm;
         }
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -832,18 +906,36 @@ export function exportToPDF(content: string, filename: string, customHeader?: st
         <span>${escapeXml(effectiveFooter)}</span>
         <span>Printed: ${new Date().toLocaleDateString()}</span>
       </div>
-
-      <script>
-        window.onload = function() {
-          window.print();
-        };
-      </script>
     </body>
     </html>
   `;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  // Use hidden iframe to avoid popup blocker
+  let printFrame = document.getElementById('docuverify-print-frame') as HTMLIFrameElement;
+  if (!printFrame) {
+    printFrame = document.createElement('iframe');
+    printFrame.id = 'docuverify-print-frame';
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+  }
+
+  const frameDoc = printFrame.contentWindow?.document;
+  if (frameDoc) {
+    frameDoc.open();
+    frameDoc.write(html);
+    frameDoc.close();
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    }, 300);
+  } else {
+    window.print();
+  }
 }
 
 // 3. Export RTF (Rich Text Format)

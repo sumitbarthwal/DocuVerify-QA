@@ -25,30 +25,79 @@ function escapeXml(str: string): string {
 }
 
 /**
- * Parses markdown inline formatting (**bold**, *italic*, __underline__)
+ * Parses markdown inline formatting (**bold**, *italic*, <u>underline</u>, __underline__, ~~strike~~, <mark>highlight</mark>, `code`, sub, sup)
  * into authentic Microsoft Word OpenXML run (<w:r>) elements.
  */
 function parseInlineMarkdownRuns(text: string): string {
   if (!text) return '';
-  // Split on bold, underline, italic markdown patterns
-  const tokens = text.split(/(\*\*.*?\*\*|__.*?__|\*[^*]+?\*)/g);
+
+  // Tokenize regex matching all supported inline formatting syntax
+  const tokenRegex = /(\*\*\*[\s\S]+?\*\*\*|\*\*[\s\S]+?\*\*|__[\s\S]+?__|<u>[\s\S]+?<\/u>|~~[\s\S]+?~~|<del>[\s\S]+?<\/del>|<mark>[\s\S]+?<\/mark>|==[\s\S]+?==|`[^`]+?`|<code>[\s\S]+?<\/code>|<sub>[\s\S]+?<\/sub>|<sup>[\s\S]+?<\/sup>|\*[^*]+?\*)/g;
+
+  const tokens = text.split(tokenRegex);
+
   return tokens.map(token => {
     if (!token) return '';
-    // Bold
+
+    // 1. Bold & Italic (***text***)
+    if (token.startsWith('***') && token.endsWith('***') && token.length >= 6) {
+      const inner = token.slice(3, -3);
+      return `<w:r><w:rPr><w:b/><w:i/><w:color w:val="1E293B"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+
+    // 2. Bold (**text**)
     if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
       const inner = token.slice(2, -2);
       return `<w:r><w:rPr><w:b/><w:color w:val="1E293B"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
     }
-    // Underline
-    if (token.startsWith('__') && token.endsWith('__') && token.length >= 4) {
-      const inner = token.slice(2, -2);
+
+    // 3. Underline (<u>text</u> or __text__)
+    if ((token.startsWith('<u>') && token.endsWith('</u>') && token.length >= 7) ||
+        (token.startsWith('__') && token.endsWith('__') && token.length >= 4)) {
+      const inner = token.startsWith('<u>') ? token.slice(3, -4) : token.slice(2, -2);
       return `<w:r><w:rPr><w:u w:val="single"/><w:color w:val="1E293B"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
     }
-    // Italic
+
+    // 4. Strikethrough (~~text~~ or <del>text</del>)
+    if ((token.startsWith('~~') && token.endsWith('~~') && token.length >= 4) ||
+        (token.startsWith('<del>') && token.endsWith('</del>') && token.length >= 11)) {
+      const inner = token.startsWith('~~') ? token.slice(2, -2) : token.slice(5, -6);
+      return `<w:r><w:rPr><w:strike/><w:color w:val="64748B"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+
+    // 5. Highlight (<mark>text</mark> or ==text==)
+    if ((token.startsWith('<mark>') && token.endsWith('</mark>') && token.length >= 13) ||
+        (token.startsWith('==') && token.endsWith('==') && token.length >= 4)) {
+      const inner = token.startsWith('<mark>') ? token.slice(6, -7) : token.slice(2, -2);
+      return `<w:r><w:rPr><w:highlight w:val="yellow"/><w:color w:val="0F172A"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+
+    // 6. Inline Code (`code` or <code>code</code>)
+    if ((token.startsWith('`') && token.endsWith('`') && token.length >= 2) ||
+        (token.startsWith('<code>') && token.endsWith('</code>') && token.length >= 13)) {
+      const inner = token.startsWith('`') ? token.slice(1, -1) : token.slice(6, -7);
+      return `<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="20"/><w:color w:val="0F172A"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+
+    // 7. Subscript (<sub>text</sub>)
+    if (token.startsWith('<sub>') && token.endsWith('</sub>') && token.length >= 11) {
+      const inner = token.slice(5, -6);
+      return `<w:r><w:rPr><w:vertAlign w:val="subscript"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+
+    // 8. Superscript (<sup>text</sup>)
+    if (token.startsWith('<sup>') && token.endsWith('</sup>') && token.length >= 11) {
+      const inner = token.slice(5, -6);
+      return `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    }
+
+    // 9. Italic (*text*)
     if (token.startsWith('*') && token.endsWith('*') && token.length >= 2) {
       const inner = token.slice(1, -1);
       return `<w:r><w:rPr><w:i/><w:color w:val="334155"/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
     }
+
+    // Normal text run
     return `<w:r><w:t xml:space="preserve">${escapeXml(token)}</w:t></w:r>`;
   }).join('');
 }
@@ -433,8 +482,9 @@ export async function createStandardDocxPackage(
 }
 
 /**
- * Patches text inside an existing DOCX arrayBuffer while retaining 100% of styles,
- * headers, footers, relationships, embedded media, and margins.
+ * Patches text inside an existing DOCX arrayBuffer across document.xml, headers,
+ * footers, and footnotes while retaining 100% of styles, formatting, embedded media,
+ * tables, and margins.
  */
 export async function patchDocxArrayBuffer(
   buffer: ArrayBuffer,
@@ -442,36 +492,65 @@ export async function patchDocxArrayBuffer(
 ): Promise<ArrayBuffer> {
   try {
     const zip = await JSZip.loadAsync(buffer);
-    const docFile = zip.file('word/document.xml');
-    if (!docFile) {
+
+    // Target all text-bearing XML files in the Word package
+    const xmlTargetFiles = Object.keys(zip.files).filter(k => 
+      /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/i.test(k)
+    );
+
+    if (xmlTargetFiles.length === 0) {
       return buffer;
     }
 
-    let docXml = await docFile.async('text');
+    let anyModified = false;
 
-    for (const { oldText, newText } of replacements) {
-      if (!oldText || oldText === newText) continue;
+    for (const filename of xmlTargetFiles) {
+      const file = zip.file(filename);
+      if (!file) continue;
 
-      // 1. Direct match
-      if (docXml.includes(oldText)) {
-        docXml = docXml.split(oldText).join(escapeXml(newText));
-        continue;
+      let xmlContent = await file.async('text');
+      let fileModified = false;
+
+      for (const { oldText, newText } of replacements) {
+        if (!oldText || oldText === newText) continue;
+
+        // 1. Direct match
+        if (xmlContent.includes(oldText)) {
+          xmlContent = xmlContent.split(oldText).join(escapeXml(newText));
+          fileModified = true;
+          continue;
+        }
+
+        // 2. XML escaped match
+        const escapedOld = escapeXml(oldText);
+        const escapedNew = escapeXml(newText);
+        if (xmlContent.includes(escapedOld)) {
+          xmlContent = xmlContent.split(escapedOld).join(escapedNew);
+          fileModified = true;
+          continue;
+        }
+
+        // 3. Match within text runs: replace across spaces
+        try {
+          const regex = new RegExp(oldText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'), 'g');
+          if (regex.test(xmlContent)) {
+            xmlContent = xmlContent.replace(regex, escapedNew);
+            fileModified = true;
+          }
+        } catch {
+          // Ignore regex syntax errors
+        }
       }
 
-      // 2. XML escaped match
-      const escapedOld = escapeXml(oldText);
-      const escapedNew = escapeXml(newText);
-      if (docXml.includes(escapedOld)) {
-        docXml = docXml.split(escapedOld).join(escapedNew);
-        continue;
+      if (fileModified) {
+        zip.file(filename, xmlContent);
+        anyModified = true;
       }
-
-      // 3. Normalized whitespace match
-      const regex = new RegExp(oldText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'), 'g');
-      docXml = docXml.replace(regex, escapedNew);
     }
 
-    zip.file('word/document.xml', docXml);
+    if (!anyModified) {
+      return buffer;
+    }
 
     return await zip.generateAsync({
       type: 'arraybuffer',
@@ -480,6 +559,98 @@ export async function patchDocxArrayBuffer(
     });
   } catch (err) {
     console.warn('Docx patching encountered issue, returning original:', err);
+    return buffer;
+  }
+}
+
+/**
+ * Updates running header and footer text directly inside existing DOCX OpenXML package files,
+ * preserving all formatting, styles, page numbers, and embedded images.
+ */
+export async function updateDocxHeaderFooter(
+  buffer: ArrayBuffer,
+  newHeader?: string,
+  newFooter?: string
+): Promise<ArrayBuffer> {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    let modified = false;
+
+    // 1. Update headers
+    if (newHeader !== undefined) {
+      const headerFiles = Object.keys(zip.files).filter(k => /^word\/header\d*\.xml$/i.test(k));
+      if (headerFiles.length > 0) {
+        for (const hf of headerFiles) {
+          let xml = await zip.file(hf)!.async('text');
+          // Replace text inside the first <w:t> or all <w:t> elements
+          if (/<w:t(?:\s+[^>]*)?>[\s\S]*?<\/w:t>/i.test(xml)) {
+            // Replace first text run with new header and empty out subsequent ones in same paragraph
+            let replacedFirst = false;
+            xml = xml.replace(/<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/gi, (match) => {
+              if (!replacedFirst) {
+                replacedFirst = true;
+                return `<w:t xml:space="preserve">${escapeXml(newHeader)}</w:t>`;
+              }
+              return `<w:t></w:t>`;
+            });
+            zip.file(hf, xml);
+            modified = true;
+          }
+        }
+      } else {
+        // Create header1.xml
+        zip.file('word/header1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr><w:jc w:val="both"/><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="CBD5E1"/></w:pBdr></w:pPr>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="64748B"/></w:rPr><w:t xml:space="preserve">${escapeXml(newHeader)}</w:t></w:r>
+  </w:p>
+</w:hdr>`);
+        modified = true;
+      }
+    }
+
+    // 2. Update footers
+    if (newFooter !== undefined) {
+      const footerFiles = Object.keys(zip.files).filter(k => /^word\/footer\d*\.xml$/i.test(k));
+      if (footerFiles.length > 0) {
+        for (const ff of footerFiles) {
+          let xml = await zip.file(ff)!.async('text');
+          if (/<w:t(?:\s+[^>]*)?>[\s\S]*?<\/w:t>/i.test(xml)) {
+            let replacedFirst = false;
+            xml = xml.replace(/<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/gi, (match) => {
+              if (!replacedFirst) {
+                replacedFirst = true;
+                return `<w:t xml:space="preserve">${escapeXml(newFooter)}</w:t>`;
+              }
+              return `<w:t></w:t>`;
+            });
+            zip.file(ff, xml);
+            modified = true;
+          }
+        }
+      } else {
+        // Create footer1.xml
+        zip.file('word/footer1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr><w:jc w:val="both"/><w:pBdr><w:top w:val="single" w:sz="6" w:space="4" w:color="CBD5E1"/></w:pBdr></w:pPr>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="64748B"/></w:rPr><w:t xml:space="preserve">${escapeXml(newFooter)}</w:t></w:r>
+  </w:p>
+</w:ftr>`);
+        modified = true;
+      }
+    }
+
+    if (!modified) return buffer;
+
+    return await zip.generateAsync({
+      type: 'arraybuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 }
+    });
+  } catch (err) {
+    console.warn('Docx header/footer update encountered issue:', err);
     return buffer;
   }
 }
